@@ -494,8 +494,9 @@ const Style = () => (
   .dva-nav{position:sticky;top:0;z-index:40;background:rgba(244,249,252,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);}
   .dva-navrow{display:flex;align-items:center;justify-content:space-between;min-height:104px;padding:8px 0;}
   .dva-navlinks{display:flex;align-items:center;gap:6px;}
-  .dva-navlink{padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;color:var(--ink-2);border:none;background:none;transition:.18s;}
-  .dva-navlink:hover{color:var(--teal);background:#fff;}
+  .dva-navlink{padding:10px 18px;border-radius:999px;font-weight:600;font-size:14px;color:var(--ink-2);border:none;background:none;
+    transition:transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;}
+  .dva-navlink:hover{color:var(--teal);background:#fff;transform:translateY(-1px);box-shadow:0 4px 12px -8px rgba(15,24,30,.25);}
   .dva-navlink.active{color:var(--teal);background:var(--teal-soft);}
   .dva-burger{display:none;border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px;color:var(--ink);}
   .dva-mobile{display:none;flex-direction:column;gap:2px;padding:10px 0 14px;border-top:1px solid var(--line);}
@@ -510,26 +511,46 @@ const Style = () => (
   .dva-logo-name{font-family:'Figtree';font-weight:800;font-size:19px;letter-spacing:-.01em;}
   .dva-logo-name span{color:var(--teal-2);}
 
-  /* buttons — friendly pills */
-  .dva-btn{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:12px 22px;font-weight:700;font-size:14px;border:1px solid transparent;transition:.18s;text-decoration:none;}
+  /* buttons — friendly pills with micro-interactions */
+  .dva-btn{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:12px 22px;font-weight:700;font-size:14px;border:1px solid transparent;text-decoration:none;
+    position:relative;overflow:hidden;
+    transition:transform .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease, border-color .18s ease;}
+  .dva-btn:active{transform:translateY(0) scale(.96);transition-duration:.08s;}
   .dva-btn-primary{background:var(--teal);color:#fff;}
-  .dva-btn-primary:hover{background:#BE0000;transform:translateY(-1px);box-shadow:0 12px 26px -12px rgba(204,18,18,.5);}
+  .dva-btn-primary:hover{background:#BE0000;transform:translateY(-2px);box-shadow:0 14px 28px -12px rgba(204,18,18,.55);}
   .dva-btn-teal{background:#2F383F;color:#fff;}
-  .dva-btn-teal:hover{background:var(--ink);transform:translateY(-1px);}
+  .dva-btn-teal:hover{background:var(--ink);transform:translateY(-2px);box-shadow:0 12px 24px -14px rgba(15,24,30,.5);}
   .dva-btn-ghost{background:#fff;color:var(--ink);border-color:var(--line);}
-  .dva-btn-ghost:hover{border-color:var(--teal-2);color:var(--teal);}
+  .dva-btn-ghost:hover{background:var(--teal-soft);border-color:var(--teal-2);color:var(--teal);transform:translateY(-2px);box-shadow:0 8px 18px -12px rgba(204,18,18,.35);}
   .dva-btn-sm{padding:8px 14px;font-size:12.5px;border-radius:999px;}
-  .dva-btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;}
+  .dva-btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;}
+  /* sheen sweep across solid buttons */
+  .dva-btn-primary::after,.dva-btn-teal::after{content:"";position:absolute;top:0;left:-80%;width:50%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);transition:left .5s ease;pointer-events:none;}
+  .dva-btn-primary:hover::after,.dva-btn-teal:hover::after{left:130%;}
+  .dva-btn[disabled]::after{display:none;}
 
   /* tonal action chips — light, friendly contact-channel buttons */
-  .dva-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 13px;font-weight:700;font-size:12.5px;border:1px solid transparent;transition:.15s;white-space:nowrap;}
-  .dva-chip:hover{border-color:currentColor;transform:translateY(-1px);}
+  .dva-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 13px;font-weight:700;font-size:12.5px;border:1px solid transparent;white-space:nowrap;
+    transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, background .16s ease;}
+  .dva-chip:hover{border-color:currentColor;transform:translateY(-2px) scale(1.04);box-shadow:0 8px 16px -10px rgba(15,24,30,.35);}
+  .dva-chip:active{transform:scale(.95);transition-duration:.08s;}
+  .dva-chip svg{transition:transform .16s ease;}
+  .dva-chip:hover svg{transform:scale(1.18) rotate(-8deg);}
   .dva-chip-ai{background:var(--teal-soft);color:#BE0000;}
   .dva-chip-wa{background:#e3f6e9;color:#15803d;}
   .dva-chip-mail{background:#E9F2FA;color:#4D565D;}
 
   /* cards / surfaces — soft, open */
-  .dva-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 2px 10px -6px rgba(15,24,30,.08);}
+  .dva-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 2px 10px -6px rgba(15,24,30,.08);
+    transition:box-shadow .25s ease, border-color .25s ease, transform .25s ease;}
+  .dva-card:hover{box-shadow:0 10px 28px -16px rgba(15,24,30,.2);}
+  /* KPI/stat cards: lift + brand tint + staggered entrance */
+  .mgr-stats .dva-card:hover,.exec-stats .dva-card:hover{transform:translateY(-3px);border-color:#F59692;}
+  .mgr-stats .dva-card,.exec-stats .dva-card{animation:fadeUp .45s both;}
+  .mgr-stats .dva-card:nth-child(2),.exec-stats .dva-card:nth-child(2){animation-delay:.06s;}
+  .mgr-stats .dva-card:nth-child(3),.exec-stats .dva-card:nth-child(3){animation-delay:.12s;}
+  .mgr-stats .dva-card:nth-child(4),.exec-stats .dva-card:nth-child(4){animation-delay:.18s;}
   .dva-pad{padding:26px;}
   .dva-eyebrow{font-family:'JetBrains Mono';font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--teal);font-weight:500;}
 
@@ -570,16 +591,27 @@ const Style = () => (
   .dva-table{width:100%;border-collapse:collapse;font-size:13.5px;}
   .dva-table th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:700;padding:13px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;}
   .dva-table td{padding:15px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle;}
+  .dva-table td{transition:background .15s ease;}
   .dva-table tr:hover td{background:var(--paper);}
+  .dva-table tbody tr:hover td:first-child{box-shadow:inset 3px 0 0 var(--teal-2);}
   .dva-input,.dva-select{font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;color:var(--ink);outline:none;transition:.15s;}
   .dva-input:focus,.dva-select:focus{border-color:var(--teal-2);box-shadow:0 0 0 3px rgba(204,18,18,.12);}
   .dva-drop{border:2px dashed var(--line);border-radius:20px;padding:38px;text-align:center;transition:.2s;background:#fcfdfe;}
   .dva-drop.drag{border-color:var(--teal-2);background:var(--teal-soft);}
-  .dva-tab{padding:9px 18px;border-radius:999px;font-weight:700;font-size:13px;border:1px solid var(--line);background:#fff;color:var(--ink-2);transition:.15s;}
-  .dva-tab:hover{border-color:var(--teal-2);color:var(--teal);}
+  .dva-tab{padding:9px 18px;border-radius:999px;font-weight:700;font-size:13px;border:1px solid var(--line);background:#fff;color:var(--ink-2);
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease, color .15s ease, border-color .15s ease;}
+  .dva-tab:hover{border-color:var(--teal-2);color:var(--teal);transform:translateY(-1px);box-shadow:0 6px 14px -10px rgba(15,24,30,.3);}
+  .dva-tab:active{transform:scale(.95);}
   .dva-tab.active{background:var(--teal);color:#fff;border-color:var(--teal);}
   .fade-up{animation:fadeUp .5s both;}
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  /* persona card icon nudge */
+  .dva-ico{transition:transform .22s ease;}
+  .dva-persona:hover .dva-ico{transform:scale(1.1) rotate(-5deg);}
+  /* respect reduced-motion preferences */
+  @media (prefers-reduced-motion: reduce){
+    .dva *,.dva *::before,.dva *::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+  }
   .dva-progress{height:8px;border-radius:999px;background:var(--line-2);overflow:hidden;}
   .dva-progress > i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--teal),var(--teal-2));}
   `}</style>
@@ -1739,10 +1771,11 @@ const ThemeOverrideStyle = () => (
       display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between;
       gap:18px; min-height:150px; padding:28px; text-align:left; cursor:pointer;
       background:var(--surface); border:1px solid var(--line); border-radius:20px;
-      transition:border-color .15s ease, transform .15s ease, background .15s ease;
+      transition:border-color .2s ease, transform .2s ease, background .2s ease, box-shadow .2s ease;
       font-family:inherit; color:var(--ink);
     }
-    .exec-hub-tile:hover{ border-color:var(--teal-2); transform:translateY(-1px); background:var(--line-2); }
+    .exec-hub-tile:hover{ border-color:var(--teal-2); transform:translateY(-4px); box-shadow:0 18px 36px -20px rgba(15,24,30,.35); }
+    .exec-hub-tile:active{ transform:translateY(-1px) scale(.99); }
     .exec-hub-tile-eyebrow{
       font-size:11.5px; letter-spacing:.16em; color:var(--ink-2);
       font-weight:600; text-transform:uppercase;
@@ -1750,7 +1783,9 @@ const ThemeOverrideStyle = () => (
     .exec-hub-tile-cta{
       font-family:'Figtree',sans-serif;
       font-size:30px; font-weight:800; color:var(--ink); letter-spacing:-.01em;
+      transition:color .2s ease, transform .2s ease;
     }
+    .exec-hub-tile:hover .exec-hub-tile-cta{ color:var(--teal); transform:translateX(4px); }
 
     @media(max-width:760px){
       .exec-hub-tiles{ grid-template-columns:1fr !important; }
