@@ -113,7 +113,7 @@ function WhatsAppModal({lead, manager, onClose, onSent}){
         <div className="dva-wamodal-head">
           <div>
             <div className="dva-eyebrow" style={{color:"#25d366"}}>WhatsApp · {phone || "no number on file"}</div>
-            <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Bricolage Grotesque',sans-serif"}}>{lead.name}</h2>
+            <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Figtree',sans-serif"}}>{lead.name}</h2>
             <div style={{fontSize:13,color:"var(--ink-2)",marginTop:2}}>
               <span className="dva-mono">{lead.id}</span> · {lead.program} · {lead.campus}
             </div>
@@ -256,7 +256,7 @@ function EmailModal({lead, manager, onClose, onSent}){
         <div className="dva-emodal-head">
           <div>
             <div className="dva-eyebrow" style={{color:"var(--sky)"}}>Email · {email || "no email on file"}</div>
-            <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Bricolage Grotesque',sans-serif"}}>{lead.name}</h2>
+            <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Figtree',sans-serif"}}>{lead.name}</h2>
             <div style={{fontSize:13,color:"var(--ink-2)",marginTop:2}}>
               <span className="dva-mono">{lead.id}</span> · {lead.program} · {lead.campus}
             </div>
@@ -316,7 +316,7 @@ const CONTACT_OUTCOMES = {
   delivered: { label:"Message delivered", bg:"rgba(148,163,184,.18)", fg:"#94a3b8" },
   read:      { label:"Read, no reply",    bg:"rgba(251,191,36,.15)", fg:"#fbbf24" },
   scheduled: { label:"Callback scheduled",bg:"rgba(251,191,36,.15)", fg:"#fbbf24" },
-  connected: { label:"Connected",         bg:"rgba(0,168,232,.16)", fg:"#0088bb" },
+  connected: { label:"Connected",         bg:"rgba(22,163,74,.14)", fg:"#15803d" },
   declined:  { label:"Declined",          bg:"rgba(255,90,77,.15)", fg:"#fca5a5" },
 };
 
@@ -405,7 +405,7 @@ function LeadDetailModal({lead, manager, onClose}){
         <div className="dva-lmodal-head">
           <div>
             <div className="dva-eyebrow" style={{color:"var(--teal)"}}>Lead profile</div>
-            <h2 style={{margin:"4px 0 0",fontSize:22,fontWeight:800,fontFamily:"'Bricolage Grotesque',sans-serif"}}>{lead.name}</h2>
+            <h2 style={{margin:"4px 0 0",fontSize:22,fontWeight:800,fontFamily:"'Figtree',sans-serif"}}>{lead.name}</h2>
             <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"var(--ink-2)",marginTop:6}}>
               <span className="dva-mono">{lead.id}</span>
               <Badge status={lead.status}/>
@@ -465,23 +465,25 @@ function LeadDetailModal({lead, manager, onClose}){
 /* ============================== THEME / STYLE ============================== */
 const Style = () => (
   <style>{`
-  @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Figtree:wght@500;600;700;800&family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
   .dva {
-    /* DVA brand palette — sourced from digitalvibesasia.com */
-    --ink:#0d2b3e; --ink-2:#4a6a7d; --line:#dfeaf2; --line-2:#ecf4f9;
-    --paper:#f4f9fc; --surface:#ffffff;
-    --teal:#006090; --teal-2:#00a8e8; --teal-soft:#e3f4fc;
-    --coral:#ff5a4d; --coral-soft:#ffe7e3; --amber:#FFB134; --amber-soft:#fff3dd;
-    --violet:#014965; --sky:#0088bb;
+    /* DVA official brand palette — "Digital Vibes Asia Brand CI 2023"
+       Primary: DVA Red #CC1212 (P1788C) · Secondary: Dark Cool Grey #0F181E (P7547C)
+       Shade/tint ramps from the CI book; green/amber kept for status semantics only. */
+    --ink:#0F181E; --ink-2:#606971; --line:#DCE7F0; --line-2:#E9F2FA;
+    --paper:#EFFAFF; --surface:#ffffff;
+    --teal:#CC1212; --teal-2:#EA2B20; --teal-soft:#FFEAEC;
+    --coral:#F9371E; --coral-soft:#FFEAEC; --amber:#e0950b; --amber-soft:#fdf0d8;
+    --violet:#0F181E; --sky:#4D565D;
     color:var(--ink);
-    font-family:'Hanken Grotesk',system-ui,sans-serif;
+    font-family:'Montserrat',system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;
     background:var(--paper);
   }
   .dva *{box-sizing:border-box;}
   .dva-mono{font-family:'JetBrains Mono',monospace;font-feature-settings:"tnum";}
-  .dva-display{font-family:'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;line-height:1.06;}
+  .dva-display{font-family:'Figtree',sans-serif;letter-spacing:-.02em;line-height:1.06;}
   .dva button{font-family:inherit;cursor:pointer;}
   .dva ::selection{background:var(--teal-2);color:#fff;}
 
@@ -504,30 +506,30 @@ const Style = () => (
 
   /* logo */
   .dva-logo{display:flex;align-items:center;gap:11px;border:none;background:none;padding:0;}
-  .dva-logo-mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(140deg,var(--violet),var(--teal));display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px -8px rgba(1,73,101,.55);}
-  .dva-logo-name{font-family:'Bricolage Grotesque';font-weight:800;font-size:19px;letter-spacing:-.01em;}
+  .dva-logo-mark{width:38px;height:38px;border-radius:11px;background:linear-gradient(140deg,var(--ink),#2F383F);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px -8px rgba(15,24,30,.55);}
+  .dva-logo-name{font-family:'Figtree';font-weight:800;font-size:19px;letter-spacing:-.01em;}
   .dva-logo-name span{color:var(--teal-2);}
 
   /* buttons — friendly pills */
   .dva-btn{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:12px 22px;font-weight:700;font-size:14px;border:1px solid transparent;transition:.18s;text-decoration:none;}
-  .dva-btn-primary{background:var(--violet);color:#fff;}
-  .dva-btn-primary:hover{background:var(--teal);transform:translateY(-1px);box-shadow:0 12px 26px -12px rgba(1,73,101,.55);}
-  .dva-btn-teal{background:var(--teal);color:#fff;}
-  .dva-btn-teal:hover{background:var(--sky);transform:translateY(-1px);}
+  .dva-btn-primary{background:var(--teal);color:#fff;}
+  .dva-btn-primary:hover{background:#BE0000;transform:translateY(-1px);box-shadow:0 12px 26px -12px rgba(204,18,18,.5);}
+  .dva-btn-teal{background:#2F383F;color:#fff;}
+  .dva-btn-teal:hover{background:var(--ink);transform:translateY(-1px);}
   .dva-btn-ghost{background:#fff;color:var(--ink);border-color:var(--line);}
   .dva-btn-ghost:hover{border-color:var(--teal-2);color:var(--teal);}
   .dva-btn-sm{padding:8px 14px;font-size:12.5px;border-radius:999px;}
   .dva-btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;}
 
   /* cards / surfaces — soft, open */
-  .dva-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 2px 10px -6px rgba(13,43,62,.08);}
+  .dva-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 2px 10px -6px rgba(15,24,30,.08);}
   .dva-pad{padding:26px;}
-  .dva-eyebrow{font-family:'JetBrains Mono';font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--sky);font-weight:500;}
+  .dva-eyebrow{font-family:'JetBrains Mono';font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--teal);font-weight:500;}
 
   /* hero */
   .dva-hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);background:
-     radial-gradient(80% 120% at 85% -10%, rgba(0,168,232,.14), transparent 60%),
-     radial-gradient(60% 90% at 5% 0%, rgba(255,177,52,.10), transparent 55%);}
+     radial-gradient(80% 120% at 85% -10%, rgba(204,18,18,.08), transparent 60%),
+     radial-gradient(60% 90% at 5% 0%, rgba(15,24,30,.06), transparent 55%);}
   .dva-hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center;padding:78px 0 82px;}
   @media(max-width:880px){.dva-hero-grid{grid-template-columns:1fr;gap:30px;padding:46px 0 52px;}}
   .dva-h1{font-size:60px;font-weight:800;margin:16px 0 0;}
@@ -536,18 +538,18 @@ const Style = () => (
   .dva-lead{font-size:18.5px;color:var(--ink-2);max-width:32ch;margin:20px 0 30px;line-height:1.65;}
 
   /* ekg pulse panel */
-  .dva-pulsebox{position:relative;background:linear-gradient(155deg,#013049,#006090);border-radius:24px;padding:28px;color:#fff;overflow:hidden;box-shadow:0 30px 60px -30px rgba(1,73,101,.7);}
+  .dva-pulsebox{position:relative;background:linear-gradient(155deg,#0F181E,#2F383F);border-radius:24px;padding:28px;color:#fff;overflow:hidden;box-shadow:0 30px 60px -30px rgba(15,24,30,.7);}
   .dva-pulsebox .grid-lines{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:34px 34px;}
-  .ekg{stroke:var(--teal-2);stroke-width:2.4;fill:none;filter:drop-shadow(0 0 6px rgba(0,168,232,.8));stroke-dasharray:1400;stroke-dashoffset:1400;animation:ekg 3.2s linear infinite;}
+  .ekg{stroke:var(--teal-2);stroke-width:2.4;fill:none;filter:drop-shadow(0 0 6px rgba(249,55,30,.8));stroke-dasharray:1400;stroke-dashoffset:1400;animation:ekg 3.2s linear infinite;}
   @keyframes ekg{to{stroke-dashoffset:0;}}
-  .pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--teal-2);box-shadow:0 0 0 0 rgba(0,168,232,.6);animation:pulse 1.8s infinite;}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,168,232,.55);}70%{box-shadow:0 0 0 12px rgba(0,168,232,0);}100%{box-shadow:0 0 0 0 rgba(0,168,232,0);}}
+  .pulse-dot{width:9px;height:9px;border-radius:50%;background:var(--teal-2);box-shadow:0 0 0 0 rgba(249,55,30,.6);animation:pulse 1.8s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(249,55,30,.5);}70%{box-shadow:0 0 0 12px rgba(249,55,30,0);}100%{box-shadow:0 0 0 0 rgba(249,55,30,0);}}
 
   /* persona cards */
   .dva-personas{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
   @media(max-width:880px){.dva-personas{grid-template-columns:1fr;}}
   .dva-persona{position:relative;transition:.22s;overflow:hidden;}
-  .dva-persona:hover{transform:translateY(-4px);border-color:var(--teal-2);box-shadow:0 24px 44px -28px rgba(1,73,101,.4);}
+  .dva-persona:hover{transform:translateY(-4px);border-color:var(--teal-2);box-shadow:0 24px 44px -28px rgba(15,24,30,.35);}
   .dva-persona .ribbon{position:absolute;top:0;left:0;right:0;height:4px;}
   .dva-ico{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;}
   .dva-feat{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-2);padding:6px 0;}
@@ -563,7 +565,7 @@ const Style = () => (
   .dva-table td{padding:15px 16px;border-bottom:1px solid var(--line-2);vertical-align:middle;}
   .dva-table tr:hover td{background:var(--paper);}
   .dva-input,.dva-select{font-family:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#fff;color:var(--ink);outline:none;transition:.15s;}
-  .dva-input:focus,.dva-select:focus{border-color:var(--teal-2);box-shadow:0 0 0 3px rgba(0,168,232,.15);}
+  .dva-input:focus,.dva-select:focus{border-color:var(--teal-2);box-shadow:0 0 0 3px rgba(204,18,18,.12);}
   .dva-drop{border:2px dashed var(--line);border-radius:20px;padding:38px;text-align:center;transition:.2s;background:#fcfdfe;}
   .dva-drop.drag{border-color:var(--teal-2);background:var(--teal-soft);}
   .dva-tab{padding:9px 18px;border-radius:999px;font-weight:700;font-size:13px;border:1px solid var(--line);background:#fff;color:var(--ink-2);transition:.15s;}
@@ -578,7 +580,7 @@ const Style = () => (
 
 /* status colors */
 const STATUS = {
-  New:        { bg:"var(--teal-soft)", fg:"#045f86" },
+  New:        { bg:"#DCE7F0", fg:"#2F383F" },
   Assigned:   { bg:"#e6eefb", fg:"#2456c7" },
   Contacted:  { bg:"#efeafd", fg:"#5a45d8" },
   Qualified:  { bg:"#fdf0d8", fg:"#9a6608" },
@@ -696,7 +698,7 @@ const SlaBadge = ({lead}) => {
   if (!s) return <span style={{color:"var(--ink-2)",fontSize:12.5}}>—</span>;
   const map = { overdue:{bg:"var(--coral-soft)",fg:"#c0271a",t:`Overdue ${s.h}h`,I:AlertTriangle},
                 urgent:{bg:"var(--amber-soft)",fg:"#9a6608",t:`${s.h}h left`,I:Clock},
-                ok:{bg:"var(--teal-soft)",fg:"#045f86",t:`${s.h}h left`,I:ShieldCheck} };
+                ok:{bg:"#dcf5e6",fg:"#107a43",t:`${s.h}h left`,I:ShieldCheck} };
   const m = map[s.k]; const I=m.I;
   return <span className="badge" style={{background:m.bg,color:m.fg}}><I size={11}/>{m.t}</span>;
 };
@@ -899,7 +901,7 @@ function Marketer({insert,go}){
         <div className="dva-card dva-pad fade-up">
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:14}}>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <span className="badge" style={{background:"var(--teal-soft)",color:"#045f86"}}>{validCount} valid</span>
+              <span className="badge" style={{background:"#dcf5e6",color:"#107a43"}}>{validCount} valid</span>
               {rows.length-validCount>0 && <span className="badge" style={{background:"var(--coral-soft)",color:"#c0271a"}}>{rows.length-validCount} flagged</span>}
               <span style={{color:"var(--ink-2)",fontSize:13}}>{rows.length} rows previewed</span>
             </div>
@@ -918,7 +920,7 @@ function Marketer({insert,go}){
                   <td>{r.email||<i style={{color:"var(--coral)"}}>—</i>}</td>
                   <td className="dva-mono" style={{fontSize:12.5}}>{r.phone||<i style={{color:"var(--coral)"}}>—</i>}</td>
                   <td>{r.program}</td><td>{r.source}</td>
-                  <td>{r._valid? <span className="badge" style={{background:"var(--teal-soft)",color:"#045f86"}}><CheckCircle2 size={11}/>ok</span>
+                  <td>{r._valid? <span className="badge" style={{background:"#dcf5e6",color:"#107a43"}}><CheckCircle2 size={11}/>ok</span>
                        : <span className="badge" style={{background:"var(--coral-soft)",color:"#c0271a"}}><AlertTriangle size={11}/>{r._issue}</span>}</td>
                 </tr>
               ))}</tbody>
@@ -1048,7 +1050,7 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
                         {STAGE_ORDER.map(s=>(<option key={s} value={s}>{s}</option>))}
                       </select>
                     </td>
-                    <td>{l.firstContactAt? <span className="badge" style={{background:"var(--teal-soft)",color:"#045f86"}}><CheckCircle2 size={11}/>contacted</span> : <SlaBadge lead={l}/>}</td>
+                    <td>{l.firstContactAt? <span className="badge" style={{background:"#dcf5e6",color:"#107a43"}}><CheckCircle2 size={11}/>contacted</span> : <SlaBadge lead={l}/>}</td>
                     <td style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                       {!closed &&
                         <button className="dva-btn dva-btn-sm" onClick={()=>callWithAi(l)} style={{padding:"5px 9px",background:"var(--violet)",color:"#fff",border:"none"}}><PhoneCall size={13}/>Call with AI</button>}
@@ -1115,7 +1117,7 @@ function ExecHub({leads, onOpen}){
     [leads]
   );
   const stageColors = stageData.map(d => STATUS[d.name]?.fg || "#6d5cf0");
-  const tooltipStyle = { background:"#131826", border:"1px solid #1f2937", borderRadius:8, fontSize:12, color:"#f1f5f9" };
+  const tooltipStyle = { background:"#0F181E", border:"1px solid #2F383F", borderRadius:8, fontSize:12, color:"#f1f5f9" };
 
   return (
     <>
@@ -1141,8 +1143,8 @@ function ExecHub({leads, onOpen}){
             <BarChart data={sourceData} margin={{top:4,right:8,left:-12,bottom:0}}>
               <XAxis dataKey="name" tick={{fontSize:11,fill:"#94a3b8"}}/>
               <YAxis tick={{fontSize:11,fill:"#94a3b8"}} allowDecimals={false}/>
-              <Tooltip cursor={{fill:"rgba(0,168,232,.08)"}} contentStyle={tooltipStyle}/>
-              <Bar dataKey="value" radius={[6,6,0,0]} fill="#00a8e8"/>
+              <Tooltip cursor={{fill:"rgba(204,18,18,.06)"}} contentStyle={tooltipStyle}/>
+              <Bar dataKey="value" radius={[6,6,0,0]} fill="#CC1212"/>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -1203,7 +1205,7 @@ function DeltaBadge({current, prev}){
   );
   const up = diff > 0;
   const I = up ? ArrowUpRight : ArrowDownRight;
-  const color = up ? "var(--teal-2)" : "var(--coral)";
+  const color = up ? "#16a34a" : "var(--coral)";
   return (
     <span style={{display:"inline-flex",alignItems:"center",gap:3,color,fontWeight:700,fontSize:12.5}}>
       <I size={11}/> {up ? "+" : ""}{diff}
@@ -1425,7 +1427,7 @@ function OverallPerfView({leads, managers, reassign, onBack}){
             <tr key={m.id}>
               <td style={{fontWeight:600}}>{m.name}</td>
               <td>{m.active
-                ? <span className="badge" style={{background:"rgba(0,168,232,.18)",color:"#7fd4ff"}}>active</span>
+                ? <span className="badge" style={{background:"rgba(34,197,94,.18)",color:"#86efac"}}>active</span>
                 : <span className="badge" style={{background:"rgba(148,163,184,.15)",color:"#94a3b8"}}>inactive</span>}</td>
               <td className="dva-mono">{m.total}</td><td className="dva-mono">{m.open}</td><td className="dva-mono">{m.won}</td>
               <td style={{minWidth:150}}>
@@ -1556,7 +1558,7 @@ function SlaView({leads, managers, onBack}){
 
 /* ---------- Phase 5: Vox Conversation View (mock) ---------- */
 const VOX_OUTCOMES = [
-  { stage:"VALIDATED – READY", bg:"rgba(0,168,232,.18)", fg:"#7fd4ff", weight:6 },
+  { stage:"VALIDATED – READY", bg:"rgba(34,197,94,.18)", fg:"#86efac", weight:6 },
   { stage:"NEEDS FOLLOW-UP",   bg:"rgba(251,191,36,.15)", fg:"#fbbf24", weight:3 },
   { stage:"DO NOT CALL",       bg:"rgba(255,90,77,.15)",  fg:"#fca5a5", weight:1 },
 ];
@@ -1672,22 +1674,22 @@ const ThemeOverrideStyle = () => (
   <style>{`
     /* ---------- DARK THEME OVERRIDES (applied via .dva-theme-dark on root) ---------- */
     .dva.dva-theme-dark{
-      --paper:#071622; --surface:#0e2535;
-      --ink:#eef6fb; --ink-2:#8fb2c6;
-      --line:#1c3c52; --line-2:#132b3d;
-      --teal:#0088bb; --violet:#006090;
-      --teal-soft:rgba(0,168,232,.18);
-      --coral-soft:rgba(255,90,77,.18);
-      --amber-soft:rgba(255,177,52,.18);
+      --paper:#0F181E; --surface:#1B252C;
+      --ink:#E9F2FA; --ink-2:#A7B2BA;
+      --line:#2F383F; --line-2:#19232A;
+      --teal:#EA2B20; --teal-2:#F54A3F; --violet:#4D565D;
+      --teal-soft:rgba(234,43,32,.16);
+      --coral-soft:rgba(249,55,30,.18);
+      --amber-soft:rgba(224,149,11,.18);
     }
-    .dva-theme-dark .dva-nav{ background:rgba(7,22,34,.82); }
+    .dva-theme-dark .dva-nav{ background:rgba(15,24,30,.85); }
     .dva-theme-dark .dva-navlink:hover{ background:var(--surface); }
     .dva-theme-dark .dva-navlink.active{ background:var(--surface); color:var(--teal-2); box-shadow:none; }
     .dva-theme-dark .dva-burger{ background:var(--surface); color:var(--ink); border-color:var(--line); }
     .dva-theme-dark .dva-btn-ghost{ background:var(--surface); color:var(--ink); border-color:var(--line); }
     .dva-theme-dark .dva-btn-ghost:hover{ background:var(--line-2); border-color:var(--ink-2); }
     .dva-theme-dark .dva-btn-primary{ background:var(--teal); color:#fff; }
-    .dva-theme-dark .dva-btn-primary:hover{ background:var(--teal-2); }
+    .dva-theme-dark .dva-btn-primary:hover{ background:#F54A3F; }
     .dva-theme-dark .dva-input,
     .dva-theme-dark .dva-select{ background:var(--surface); border-color:var(--line); color:var(--ink); }
     .dva-theme-dark .dva-input::placeholder{ color:var(--ink-2); }
@@ -1732,7 +1734,7 @@ const ThemeOverrideStyle = () => (
       font-weight:600; text-transform:uppercase;
     }
     .exec-hub-tile-cta{
-      font-family:'Bricolage Grotesque',sans-serif;
+      font-family:'Figtree',sans-serif;
       font-size:30px; font-weight:800; color:var(--ink); letter-spacing:-.01em;
     }
 
