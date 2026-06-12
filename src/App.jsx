@@ -521,6 +521,13 @@ const Style = () => (
   .dva-btn-sm{padding:8px 14px;font-size:12.5px;border-radius:999px;}
   .dva-btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;}
 
+  /* tonal action chips — light, friendly contact-channel buttons */
+  .dva-chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 13px;font-weight:700;font-size:12.5px;border:1px solid transparent;transition:.15s;white-space:nowrap;}
+  .dva-chip:hover{border-color:currentColor;transform:translateY(-1px);}
+  .dva-chip-ai{background:var(--teal-soft);color:#BE0000;}
+  .dva-chip-wa{background:#e3f6e9;color:#15803d;}
+  .dva-chip-mail{background:#E9F2FA;color:#4D565D;}
+
   /* cards / surfaces — soft, open */
   .dva-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:0 2px 10px -6px rgba(15,24,30,.08);}
   .dva-pad{padding:26px;}
@@ -1051,17 +1058,21 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
                       </select>
                     </td>
                     <td>{l.firstContactAt? <span className="badge" style={{background:"#dcf5e6",color:"#107a43"}}><CheckCircle2 size={11}/>contacted</span> : <SlaBadge lead={l}/>}</td>
-                    <td style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      {!closed &&
-                        <button className="dva-btn dva-btn-sm" onClick={()=>callWithAi(l)} style={{padding:"5px 9px",background:"var(--violet)",color:"#fff",border:"none"}}><PhoneCall size={13}/>Call with AI</button>}
-                      {!closed &&
-                        <button className="dva-btn dva-btn-sm" onClick={()=>setWaLeadId(l.id)} style={{padding:"5px 9px",background:"#25d366",color:"#fff",border:"none"}}><MessageCircle size={13}/>WhatsApp</button>}
-                      {!closed &&
-                        <button className="dva-btn dva-btn-sm" onClick={()=>setEmailLeadId(l.id)} style={{padding:"5px 9px",background:"var(--sky)",color:"#fff",border:"none"}}><Mail size={13}/>Email</button>}
-                      {l.status==="Assigned" && !l.firstContactAt &&
-                        <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>markContact(l.id)} style={{padding:"5px 9px"}}><Clock size={13}/>Log contact</button>}
-                      {!closed &&
-                        <button className="dva-btn dva-btn-teal dva-btn-sm" onClick={()=>setStatus(l.id,next)} style={{padding:"5px 9px"}}>→ {next}</button>}
+                    <td style={{minWidth:300}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-start"}}>
+                        {!closed &&
+                          <div style={{display:"flex",gap:6}}>
+                            <button className="dva-chip dva-chip-ai" onClick={()=>callWithAi(l)}><PhoneCall size={13}/>Call with AI</button>
+                            <button className="dva-chip dva-chip-wa" onClick={()=>setWaLeadId(l.id)}><MessageCircle size={13}/>WhatsApp</button>
+                            <button className="dva-chip dva-chip-mail" onClick={()=>setEmailLeadId(l.id)}><Mail size={13}/>Email</button>
+                          </div>}
+                        <div style={{display:"flex",gap:6}}>
+                          {!closed &&
+                            <button className="dva-btn dva-btn-primary dva-btn-sm" onClick={()=>setStatus(l.id,next)} style={{padding:"6px 13px"}}>→ {next}</button>}
+                          {l.status==="Assigned" && !l.firstContactAt &&
+                            <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>markContact(l.id)} style={{padding:"6px 13px"}}><Clock size={13}/>Log contact</button>}
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1701,6 +1712,9 @@ const ThemeOverrideStyle = () => (
     .dva-theme-dark .dva-progress > i{ background:var(--teal-2); }
     .dva-theme-dark .dva-tab{ background:var(--surface); border:1px solid var(--line); color:var(--ink-2); }
     .dva-theme-dark .dva-tab.active{ background:var(--line-2); color:var(--ink); border-color:var(--teal-2); }
+    .dva-theme-dark .dva-chip-ai{ background:rgba(234,43,32,.16); color:#F59692; }
+    .dva-theme-dark .dva-chip-wa{ background:rgba(34,197,94,.16); color:#86efac; }
+    .dva-theme-dark .dva-chip-mail{ background:rgba(167,178,186,.14); color:#CBD6DF; }
 
     /* ---------- CLICKABLE LEAD NAME (always mounted) ---------- */
     .dva-leadname-btn{
