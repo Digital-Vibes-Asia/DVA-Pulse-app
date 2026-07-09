@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import logoUrl from "./assets/logo.png";
+import { supabase, LEADS_TABLE, AUTH_DOMAIN } from "./lib/supabase.js";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
   PieChart, Pie, Legend,
@@ -9,14 +10,14 @@ import {
   Upload, Users, BarChart3, BookOpen, Menu, X, CheckCircle2, ArrowRight,
   Activity, FileText, AlertTriangle, Clock, Search, Download, Zap, Filter,
   ChevronRight, TrendingUp, Inbox, Target, Gauge, RefreshCw, ShieldCheck,
-  PhoneCall, Sun, Moon, MessageCircle, Mail, Phone, CalendarDays, TrendingDown, ArrowDownRight, ArrowUpRight, ArrowRightLeft,
+  PhoneCall, Sun, Moon, MessageCircle, Mail, Phone, CalendarDays, TrendingDown, ArrowDownRight, ArrowUpRight, ArrowRightLeft, LogOut, MailCheck,
 } from "lucide-react";
 
 /* ============================== ELEVENLABS AI CALL ============================== */
 // Tenant config for the voice agent. Move to per-org settings when DVAPulse goes multi-tenant.
-const AI_AGENT_NAME = "Patrick";
-const AI_ORG_NAME = "KPJ Nursing University";
-const AI_ORG_SHORT = "KPJU";
+const AI_AGENT_NAME = "Aria";
+const AI_ORG_NAME = "Digital Vibes Asia";
+const AI_ORG_SHORT = "DVA";
 
 // The widget is mounted as a singleton in index.html (hidden by default). We:
 // (1) push per-lead context via the `dynamic-variables` attribute,
@@ -38,12 +39,9 @@ function startAiCall(lead, manager){
     lead_name: lead.name,
     lead_email: lead.email || NA,
     lead_phone: lead.phone || NA,
-    lead_country: lead.country || "Malaysia",
-    lead_location: lead.location || NA,
-    lead_qualification: lead.qualification || NA,
-    lead_program: lead.program || NA,
-    lead_campus: lead.campus || NA,
-    lead_intake: lead.intake || NA,
+    lead_company: lead.company || NA,
+    lead_budget: lead.budget || NA,
+    lead_brief: lead.message || NA,
     lead_source: lead.source || NA,
     lead_status: lead.status || "In Progress",
   };
@@ -73,27 +71,27 @@ function startAiCall(lead, manager){
 const WA_TEMPLATES = [
   {
     key:"intro", title:"Introduction",
-    desc:"First-touch hello with your name and the programme they enquired about.",
+    desc:"First-touch hello with your name and the company that enquired.",
     build:(lead, manager, org) =>
-      `Hi ${lead.name.split(" ")[0]}, this is ${manager.name} from ${org}. I'm following up on your interest in our ${lead.program} at ${lead.campus}. Is now a good time to chat?`,
+      `Hi ${lead.name.split(" ")[0]}, this is ${manager.name} from ${org}. Thanks for reaching out about your project${lead.company?` at ${lead.company}`:""}. Is now a good time for a quick chat?`,
   },
   {
-    key:"followup", title:"Application follow-up",
-    desc:"Check in on application progress and offer to answer questions.",
-    build:(lead, manager) =>
-      `Hi ${lead.name.split(" ")[0]}, just following up on your ${lead.program} application for the ${lead.intake} intake. Do you have any questions I can help with?`,
+    key:"followup", title:"Project follow-up",
+    desc:"Check in on the brief and offer to answer questions.",
+    build:(lead) =>
+      `Hi ${lead.name.split(" ")[0]}, just following up on your enquiry${lead.company?` for ${lead.company}`:""}. Do you have any questions about scope, timeline, or pricing I can help with?`,
   },
   {
     key:"schedule", title:"Schedule a call",
     desc:"Propose a quick call and let them pick a time.",
     build:(lead) =>
-      `Hi ${lead.name.split(" ")[0]}, when would be a good time for a 5-minute call about your ${lead.program} application? Morning or afternoon — what works better?`,
+      `Hi ${lead.name.split(" ")[0]}, when would be a good time for a 15-minute call to scope out your project? Morning or afternoon — what works better?`,
   },
   {
-    key:"info", title:"Send info pack",
-    desc:"Offer detailed programme materials and confirm their email.",
+    key:"info", title:"Send proposal",
+    desc:"Offer a tailored proposal and confirm their email.",
     build:(lead) =>
-      `Hi ${lead.name.split(" ")[0]}, happy to send over the full info pack for our ${lead.program} programme at ${lead.campus}. Just confirming — is ${lead.email} still the best email?`,
+      `Hi ${lead.name.split(" ")[0]}, happy to put together a tailored proposal for your project${lead.budget?` around the ${lead.budget} range`:""}. Just confirming — is ${lead.email} still the best email?`,
   },
 ];
 
@@ -115,7 +113,7 @@ function WhatsAppModal({lead, manager, onClose, onSent}){
             <div className="dva-eyebrow" style={{color:"#25d366"}}>WhatsApp · {phone || "no number on file"}</div>
             <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Figtree',sans-serif"}}>{lead.name}</h2>
             <div style={{fontSize:13,color:"var(--ink-2)",marginTop:2}}>
-              <span className="dva-mono">{lead.id}</span> · {lead.program} · {lead.campus}
+              <span className="dva-mono">{lead.id}</span>{lead.company?` · ${lead.company}`:""}{lead.budget?` · ${lead.budget}`:""}
             </div>
           </div>
           <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={onClose} aria-label="Close"><X size={14}/></button>
@@ -163,31 +161,31 @@ function WhatsAppModal({lead, manager, onClose, onSent}){
 const EMAIL_TEMPLATES = [
   {
     key:"intro", title:"Introduction",
-    desc:"First-touch hello introducing yourself and the programme.",
-    subject:(lead, org) => `Following up on your ${lead.program} enquiry at ${org}`,
+    desc:"First-touch hello introducing yourself and your company.",
+    subject:(lead, org) => `Following up on your enquiry${lead.company?` — ${lead.company}`:""}`,
     body:(lead, manager, org) =>
 `Hi ${lead.name.split(" ")[0]},
 
-This is ${manager.name} from ${org}. I'm following up on your interest in our ${lead.program} programme at ${lead.campus}.
+This is ${manager.name} from ${org}. Thanks for reaching out about your project${lead.company?` at ${lead.company}`:""}.
 
-I'd love to learn more about your goals and answer any questions you may have about the application process for the ${lead.intake} intake.
+I'd love to learn more about your goals and answer any questions you have about how we can help.
 
-Would you be free for a quick chat this week? Just reply with a time that suits you.
+Would you be free for a quick call this week? Just reply with a time that suits you.
 
 Best regards,
 ${manager.name}
 ${org}`,
   },
   {
-    key:"followup", title:"Application follow-up",
-    desc:"Check in on application progress and offer help.",
-    subject:(lead) => `Quick check-in: your ${lead.program} application`,
+    key:"followup", title:"Project follow-up",
+    desc:"Check in on the brief and offer help.",
+    subject:(lead) => `Quick check-in on your project${lead.company?` — ${lead.company}`:""}`,
     body:(lead, manager, org) =>
 `Hi ${lead.name.split(" ")[0]},
 
-Just checking in on your ${lead.program} application for the ${lead.intake} intake.
+Just checking in on your enquiry${lead.company?` for ${lead.company}`:""}.
 
-Is there anything I can help clarify — entry requirements, fees, schedule, accommodation? Happy to jump on a call or answer here.
+Is there anything I can help clarify — scope, timeline, pricing, or process? Happy to jump on a call or answer right here.
 
 Looking forward to hearing from you.
 
@@ -196,21 +194,21 @@ ${manager.name}
 ${org}`,
   },
   {
-    key:"info", title:"Send info pack",
-    desc:"Formal info pack with programme details.",
-    subject:(lead) => `${lead.program} info pack — ${lead.campus}`,
+    key:"info", title:"Send proposal",
+    desc:"Formal proposal outline tailored to the brief.",
+    subject:(lead) => `Proposal outline${lead.company?` — ${lead.company}`:""}`,
     body:(lead, manager, org) =>
 `Hi ${lead.name.split(" ")[0]},
 
-As promised, here's the info pack for our ${lead.program} programme at ${lead.campus}, covering:
+As promised, here's a proposal outline for your project${lead.company?` at ${lead.company}`:""}, covering:
 
-  • Programme structure and module breakdown
-  • Entry requirements (currently noted: ${lead.qualification})
-  • Tuition fees and available scholarships
-  • Class schedule for the ${lead.intake} intake
-  • Campus facilities and accommodation
+  • Scope of work and deliverables
+  • Recommended approach${lead.message?` for: ${lead.message}`:""}
+  • Indicative timeline and milestones
+  • Investment${lead.budget?` (working to your ${lead.budget} range)`:""}
+  • Next steps and ways of working
 
-I'll send the PDF separately. Let me know what stands out and I'll set up a call to walk through it.
+I'll send the full document separately. Let me know what stands out and I'll set up a call to walk through it.
 
 Best,
 ${manager.name}
@@ -218,12 +216,12 @@ ${org}`,
   },
   {
     key:"meeting", title:"Schedule a meeting",
-    desc:"Propose specific times for a face-to-face or video call.",
-    subject:(lead) => `Let's schedule a chat — ${lead.program}`,
+    desc:"Propose specific times for a video or in-person call.",
+    subject:(lead) => `Let's schedule a chat about your project`,
     body:(lead, manager, org) =>
 `Hi ${lead.name.split(" ")[0]},
 
-I'd like to set up a short meeting to discuss your ${lead.program} application and answer any questions in detail.
+I'd like to set up a short meeting to discuss your project${lead.company?` at ${lead.company}`:""} and answer any questions in detail.
 
 A few options that work for me this week:
 
@@ -231,7 +229,7 @@ A few options that work for me this week:
   • [DAY] afternoon
   • [DAY] evening
 
-Reply with the time that suits you best, and I'll send a calendar invite. We can do it over video call or you're welcome to visit the ${lead.campus} campus in person.
+Reply with the time that suits you best, and I'll send a calendar invite. We can do it over video call or meet in person if that's easier.
 
 Best regards,
 ${manager.name}
@@ -258,7 +256,7 @@ function EmailModal({lead, manager, onClose, onSent}){
             <div className="dva-eyebrow" style={{color:"var(--sky)"}}>Email · {email || "no email on file"}</div>
             <h2 style={{margin:"4px 0 0",fontSize:20,fontWeight:800,fontFamily:"'Figtree',sans-serif"}}>{lead.name}</h2>
             <div style={{fontSize:13,color:"var(--ink-2)",marginTop:2}}>
-              <span className="dva-mono">{lead.id}</span> · {lead.program} · {lead.campus}
+              <span className="dva-mono">{lead.id}</span>{lead.company?` · ${lead.company}`:""}{lead.budget?` · ${lead.budget}`:""}
             </div>
           </div>
           <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={onClose} aria-label="Close"><X size={14}/></button>
@@ -389,7 +387,6 @@ function ContactHistoryList({lead}){
 /* ============================== LEAD DETAIL MODAL ============================== */
 function LeadDetailModal({lead, manager, onClose}){
   if (!lead) return null;
-  const homeAddress = [lead.address, lead.location, lead.country].filter(Boolean).join(", ");
   const Row = ({label, value}) => (
     <div style={{display:"flex",flexDirection:"column",gap:2,padding:"9px 0",borderBottom:"1px solid var(--line-2)"}}>
       <span style={{fontSize:10.5,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",color:"var(--ink-2)"}}>{label}</span>
@@ -417,29 +414,31 @@ function LeadDetailModal({lead, manager, onClose}){
           <div className="dva-lmodal-grid">
             <div>
               <SectionH>Contact</SectionH>
+              <Row label="Company" value={lead.company}/>
               <Row label="Phone" value={lead.phone}/>
               <Row label="Email" value={lead.email}/>
-              <Row label="Home address" value={homeAddress}/>
             </div>
             <div>
-              <SectionH>Application</SectionH>
-              <Row label="Programme" value={lead.program}/>
-              <Row label="Preferred campus" value={lead.campus}/>
-              <Row label="Preferred intake" value={lead.intake}/>
-              <Row label="Qualification" value={lead.qualification}/>
+              <SectionH>Opportunity</SectionH>
+              <Row label="Budget" value={lead.budget}/>
+              <Row label="Source" value={lead.source}/>
+              <Row label="Assigned manager" value={manager?.name || "unassigned"}/>
             </div>
           </div>
           <div>
-            <SectionH>Pipeline</SectionH>
+            <SectionH>Project brief</SectionH>
+            <div style={{fontSize:14,color:"var(--ink)",lineHeight:1.6,padding:"9px 0",whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+              {lead.message || <span style={{color:"var(--ink-2)"}}>No brief provided.</span>}
+            </div>
+          </div>
+          <div>
+            <SectionH>Timeline</SectionH>
             <div className="dva-lmodal-grid">
               <div>
-                <Row label="Source" value={lead.source}/>
-                <Row label="Campaign" value={lead.campaign}/>
-                <Row label="Lead score" value={<span className="dva-mono" style={{fontWeight:700}}>{lead.score}</span>}/>
+                <Row label="Created" value={fmtDate(lead.createdAt)}/>
+                <Row label="Assigned" value={fmtDate(lead.assignedAt)}/>
               </div>
               <div>
-                <Row label="Assigned manager" value={manager?.name || "unassigned"}/>
-                <Row label="Created" value={fmtDate(lead.createdAt)}/>
                 <Row label="First contact" value={fmtDate(lead.firstContactAt)}/>
               </div>
             </div>
@@ -629,28 +628,29 @@ const STATUS = {
 };
 const STAGE_ORDER = ["New","Assigned","Contacted","Qualified","In Progress","Converted","Closed"];
 
-/* ============================== MOCK DATA ============================== */
-const FIRST = ["Aisha","Wei Jie","Nurul","Daniel","Priya","Hafiz","Mei Ling","Arjun","Siti","Kumar","Joanne","Faiz","Rachel","Tan","Lim","Devi","Zikri","Yuki","Brandon","Sofia","Ravi","Chloe","Iman","Marcus"];
-const LAST = ["Rahman","Tan","Abdullah","Lee","Nair","Ismail","Wong","Menon","Aziz","Raj","Chong","Hassan","Lim","Subramaniam","Yusof","Goh","Krishnan","Ong","Salleh","Pillai"];
-const CAMPUS = ["KL City","Subang","Johor Bahru","Penang"];
-const PROGRAM = ["Foundation","Diploma in Business","BSc Computer Science","BBA Marketing","Diploma in Design","MBA"];
-const CAMPAIGN = ["Meta-OpenDay","Google-Search","TikTok-Promo","Referral-Drive","Webinar-Sept","Email-Nurture"];
-const SOURCE = ["Facebook","Google","TikTok","Referral","Webinar","Organic"];
-const QUALIFICATION = ["SPM","A-Levels","STPM","Foundation","Diploma","Pre-U"];
-const INTAKE = ["May 2026","July 2026","September 2026","November 2026","January 2027","March 2027"];
-const LOCATION = ["Selangor","Kuala Lumpur","Johor","Negeri Sembilan","Penang","Perak","Sabah","Sarawak"];
-const ADDRESS = [
-  "12 Jalan Bukit Bintang",
-  "Lot 88, Taman Tun Dr Ismail",
-  "Block A-7-2, Pavilion Residences",
-  "33 Jalan Sultan Ismail",
-  "Unit 5-3A, Mont Kiara Banyan",
-  "27 Persiaran Damansara",
-  "8 Jalan Ampang Hilir",
-  "Lot 14, Bandar Sunway",
-  "No. 4 Jalan SS2/24",
-  "House 22, Taman Desa",
-];
+/* ============================== APP CONFIG ============================== */
+/* Lead sources — used for the Marketer source tag and Executive attribution. */
+const SOURCE = ["Website","Referral","LinkedIn","Google","Event","Cold Outreach","CSV Upload"];
+
+/* Budget bands — a derived classification over the free-text `budget` field.
+   Used by the Manager budget filter and the Executive budget-band grouping. */
+const BUDGET_BANDS = ["Under $10k", "$10k–$50k", "$50k–$100k", "$100k+", "Unspecified"];
+function budgetBand(budget){
+  if (!budget) return "Unspecified";
+  const raw = String(budget);
+  const digits = raw.replace(/[^0-9.]/g, "");
+  if (!digits) return "Unspecified";
+  let val = parseFloat(digits);
+  if (!isFinite(val)) return "Unspecified";
+  if (/m/i.test(raw)) val *= 1_000_000;
+  else if (/k/i.test(raw)) val *= 1_000;
+  if (val < 10_000) return "Under $10k";
+  if (val < 50_000) return "$10k–$50k";
+  if (val < 100_000) return "$50k–$100k";
+  return "$100k+";
+}
+
+/* Sales-manager roster stays app config (hardcoded); leads come from Supabase. */
 const MANAGERS_SEED = [
   { id:"m1", name:"Sharon Lim",   active:true,  capacity:14 },
   { id:"m2", name:"Aisha Karim",  active:true,  capacity:12 },
@@ -658,40 +658,25 @@ const MANAGERS_SEED = [
   { id:"m4", name:"Priya Nair",   active:true,  capacity:10 },
   { id:"m5", name:"Wei Jie Ong",  active:false, capacity:10 },
 ];
-const pick = (a) => a[Math.floor(Math.random()*a.length)];
 const HOUR = 3600*1000;
 
-function seedLeads(managers) {
-  const now = Date.now();
-  const arr = [];
-  for (let i=0;i<58;i++){
-    const created = now - Math.floor(Math.random()*60)*24*HOUR - Math.floor(Math.random()*24)*HOUR;
-    const name = `${pick(FIRST)} ${pick(LAST)}`;
-    const r = Math.random();
-    let status = "New";
-    if (r>0.93) status="New"; else if (r>0.74) status="Assigned"; else if (r>0.58) status="Contacted";
-    else if (r>0.44) status="Qualified"; else if (r>0.30) status="In Progress";
-    else if (r>0.14) status="Converted"; else status="Closed";
-    const lead = {
-      id:"L"+(1000+i),
-      name,
-      email:name.toLowerCase().replace(/[^a-z]/g,".")+"@mail.com",
-      phone:"+60 1"+ (Math.floor(Math.random()*9)) +"-"+ (1000000+Math.floor(Math.random()*8999999)),
-      campus:pick(CAMPUS), program:pick(PROGRAM), campaign:pick(CAMPAIGN), source:pick(SOURCE),
-      qualification:pick(QUALIFICATION), intake:pick(INTAKE), location:pick(LOCATION), country:"Malaysia",
-      address:pick(ADDRESS),
-      score:Math.floor(45+Math.random()*55),
-      status, manager:null, createdAt:created, assignedAt:null, firstContactAt:null,
-    };
-    if (status!=="New"){
-      const m = pick(managers.filter(x=>x.active));
-      lead.manager = m.id;
-      lead.assignedAt = created + Math.floor(Math.random()*6)*HOUR;
-      if (status!=="Assigned") lead.firstContactAt = lead.assignedAt + Math.floor(Math.random()*30)*HOUR;
-    }
-    arr.push(lead);
-  }
-  return arr;
+/* Map a Supabase `dvapulse_leads` row → the app's in-memory lead shape. */
+function mapRow(r){
+  return {
+    id: r.id,
+    name: r.name || "",
+    company: r.company || "",
+    email: r.email || "",
+    phone: r.phone || "",
+    budget: r.budget || "",
+    message: r.message || "",
+    source: r.source || "",
+    status: r.status || "New",
+    manager: r.manager || null,
+    createdAt: r.created_at ? Date.parse(r.created_at) : Date.now(),
+    assignedAt: r.assigned_at ? Date.parse(r.assigned_at) : null,
+    firstContactAt: r.first_contact_at ? Date.parse(r.first_contact_at) : null,
+  };
 }
 
 /* fair-rotation auto assignment — returns {leads, log} */
@@ -743,7 +728,7 @@ const SlaBadge = ({lead}) => {
 };
 
 /* ============================== NAV ============================== */
-function Nav({page,go,theme,toggleTheme}){
+function Nav({page,go,theme,toggleTheme,userEmail,onRefresh,refreshing,onSignOut}){
   const [open,setOpen]=useState(false);
   const items=[["home","Home"],["marketer","Marketer"],["manager","Sales Manager"],["executive","Executive Dashboard"],["guide","User Guide"]];
   const ThemeIcon = theme === "dark" ? Sun : Moon;
@@ -758,7 +743,17 @@ function Nav({page,go,theme,toggleTheme}){
           ))}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {onRefresh && (
+            <button className="dva-theme-toggle" onClick={onRefresh} disabled={refreshing} aria-label="Refresh leads" title="Refresh leads">
+              <RefreshCw size={15} style={refreshing?{animation:"dva-spin 1s linear infinite"}:undefined}/>
+            </button>
+          )}
           <button className="dva-theme-toggle" onClick={toggleTheme} aria-label={themeLabel} title={themeLabel}><ThemeIcon size={16}/></button>
+          {onSignOut && (
+            <button className="dva-btn dva-btn-ghost dva-btn-sm dva-nav-signout" onClick={onSignOut} title={userEmail||"Sign out"}>
+              <LogOut size={14}/> Sign out
+            </button>
+          )}
           <button className="dva-burger" onClick={()=>setOpen(o=>!o)} aria-label="Menu">{open?<X size={18}/>:<Menu size={18}/>}</button>
         </div>
       </div>
@@ -766,6 +761,9 @@ function Nav({page,go,theme,toggleTheme}){
         {items.map(([k,l])=>(
           <button key={k} className={"dva-navlink"+(page===k?" active":"")} style={{textAlign:"left"}} onClick={()=>{go(k);setOpen(false);}}>{l}</button>
         ))}
+        {userEmail && <div style={{padding:"10px 18px 2px",fontSize:12,color:"var(--ink-2)"}}>Signed in as {userEmail}</div>}
+        {onRefresh && <button className="dva-navlink" style={{textAlign:"left"}} onClick={()=>{onRefresh();}}>Refresh leads</button>}
+        {onSignOut && <button className="dva-navlink" style={{textAlign:"left"}} onClick={()=>{onSignOut();setOpen(false);}}>Sign out</button>}
       </div>
     </nav>
   );
@@ -775,11 +773,11 @@ function Nav({page,go,theme,toggleTheme}){
 function Home({go,stats}){
   const personas=[
     { key:"marketer", Icon:Upload, tint:"var(--teal)", title:"Marketer", desc:"Upload leads and hydrate pipelines instantly.",
-      feats:["Upload CSV files","Monitor intake quality","Route hot campaigns"], cta:"Enter workspace" },
+      feats:["Upload CSV files","Monitor lead quality","Route inbound demand"], cta:"Enter workspace" },
     { key:"manager", Icon:Users, tint:"var(--violet)", title:"Sales Manager", desc:"Action assigned queues and keep SLAs tight.",
       feats:["View assigned leads","Update lead status","Track performance"], cta:"Enter workspace" },
     { key:"executive", Icon:BarChart3, tint:"var(--sky)", title:"Executive Dashboard", desc:"Audit velocity and conversion in real time.",
-      feats:["Real-time statistics","Manager performance","Campaign insights"], cta:"View dashboard" },
+      feats:["Real-time statistics","Manager performance","Source & budget insights"], cta:"View dashboard" },
   ];
   return (
     <div>
@@ -811,7 +809,7 @@ function Home({go,stats}){
               <polyline className="ekg" points="0,70 60,70 90,70 110,30 130,100 150,55 175,70 250,70 280,70 300,20 320,108 342,60 365,70 460,70"/>
             </svg>
             <div style={{position:"relative",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginTop:10}}>
-              {[["Fresh inflow",stats.fresh],["Converted",stats.wins],["Avg score",stats.score]].map(([l,v])=>(
+              {[["Fresh inflow",stats.fresh],["Converted",stats.wins],["Assigned",stats.assigned]].map(([l,v])=>(
                 <div key={l} style={{background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:12,padding:"12px 13px"}}>
                   <div className="dva-mono" style={{fontSize:22,fontWeight:700}}>{v}</div>
                   <div style={{fontSize:11.5,opacity:.7,marginTop:3}}>{l}</div>
@@ -855,58 +853,67 @@ function Home({go,stats}){
 }
 
 /* ============================== MARKETER ============================== */
-const SAMPLE_CSV = `name,email,phone,campus,program,campaign,source,score
-Iman Yusof,iman.yusof@mail.com,+60 12-3456789,KL City,Foundation,Meta-OpenDay,Facebook,72
-Brandon Goh,brandon.goh@mail.com,+60 16-7788991,Subang,BSc Computer Science,Google-Search,Google,84
-Devi Krishnan,devi.k@mail.com,,Penang,Diploma in Business,TikTok-Promo,TikTok,55
-Marcus Ong,,+60 11-2003004,Johor Bahru,BBA Marketing,Webinar-Sept,Webinar,67
-Sofia Aziz,sofia.aziz@mail.com,+60 13-5566778,KL City,MBA,Referral-Drive,Referral,91
-Ravi Pillai,ravi.pillai@mail.com,+60 17-9090909,Subang,Diploma in Design,Email-Nurture,Organic,48`;
+const SAMPLE_CSV = `name,company,email,phone,budget,message
+Iman Yusof,Nimbus Retail,iman.yusof@nimbus.co,+60 12-3456789,$25k,"Shopify replatform plus a paid-social launch for Q3."
+Brandon Goh,Apex Logistics,brandon@apexlog.com,+60 16-7788991,$80k,"Custom fleet dashboard and a driver mobile app."
+Devi Krishnan,Lumen Studios,devi@lumen.studio,,$12k,"Brand refresh and a 5-page marketing site."
+Marcus Ong,Peak Fintech,,+60 11-2003004,$150k,"End-to-end KYC onboarding flow with compliance."
+Sofia Aziz,Coral Hospitality,sofia@coralhotels.com,+60 13-5566778,$45k,"Booking engine integration and loyalty programme."
+Ravi Pillai,Vertex Manufacturing,ravi@vertexmfg.com,+60 17-9090909,$8k,"Landing page and lead-capture funnel for a trade show."`;
 
 function Marketer({insert,go}){
   const [rows,setRows]=useState([]);
   const [drag,setDrag]=useState(false);
   const [done,setDone]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [err,setErr]=useState("");
   const fileRef=useRef();
 
   const parse=(text)=>{
     const res=Papa.parse(text.trim(),{header:true,skipEmptyLines:true});
     const cleaned=res.data.map((r,i)=>{
-      const valid = !!(r.name && r.email && r.phone);
+      const valid = !!(r.name && r.email);
       return { ...r, _row:i+1, _valid:valid,
-        _issue: !r.name?"missing name": !r.email?"missing email": !r.phone?"missing phone":"ok" };
+        _issue: !r.name?"missing name": !r.email?"missing email":"ok" };
     });
-    setRows(cleaned); setDone(null);
+    setRows(cleaned); setDone(null); setErr("");
   };
   const onFile=(f)=>{ if(!f) return; const rd=new FileReader(); rd.onload=e=>parse(String(e.target.result)); rd.readAsText(f); };
   const validCount=rows.filter(r=>r._valid).length;
 
-  const commit=()=>{
+  const commit=async ()=>{
     const good=rows.filter(r=>r._valid).map(r=>({
-      name:r.name, email:r.email, phone:r.phone,
-      campus:r.campus||pick(CAMPUS), program:r.program||pick(PROGRAM),
-      campaign:r.campaign||pick(CAMPAIGN), source:r.source||pick(SOURCE),
-      qualification:r.qualification||pick(QUALIFICATION),
-      intake:r.intake||pick(INTAKE),
-      location:r.location||pick(LOCATION),
-      country:r.country||"Malaysia",
-      address:r.address||pick(ADDRESS),
-      score:Number(r.score)||Math.floor(50+Math.random()*45),
+      name:r.name, company:r.company||"", email:r.email, phone:r.phone||"",
+      budget:r.budget||"", message:r.message||"",
+      source:r.source||"CSV Upload",
     }));
-    const log=insert(good);
-    setDone({ n:good.length, log }); setRows([]);
+    setBusy(true); setErr("");
+    try {
+      const log = await insert(good);
+      setDone({ n:good.length, log: log||[] }); setRows([]);
+    } catch (e) {
+      setErr(e?.message || "Upload failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <div className="dva-wrap" style={{padding:"34px 22px 70px"}}>
       <span className="dva-eyebrow">Marketer workspace</span>
       <h1 className="dva-display" style={{fontSize:30,fontWeight:800,margin:"8px 0 4px"}}>Upload &amp; stage leads</h1>
-      <p style={{color:"var(--ink-2)",margin:"0 0 24px"}}>Drag a CSV, preview rows, validate intake quality, then batch-insert into staging — auto-assignment routes new leads instantly.</p>
+      <p style={{color:"var(--ink-2)",margin:"0 0 24px"}}>Drag a CSV, preview rows, validate lead quality, then batch-insert into Supabase — auto-assignment routes new leads instantly.</p>
+
+      {err && (
+        <div style={{marginBottom:16,padding:"10px 14px",borderRadius:10,background:"var(--coral-soft)",color:"#c0271a",fontSize:13,display:"flex",alignItems:"center",gap:8}}>
+          <AlertTriangle size={15}/>{err}
+        </div>
+      )}
 
       {done ? (
         <div className="dva-card dva-pad fade-up" style={{borderColor:"var(--teal-2)"}}>
           <div className="dva-ico" style={{background:"var(--teal-soft)",color:"var(--teal)"}}><CheckCircle2 size={24}/></div>
-          <h3 className="dva-display" style={{fontSize:22,fontWeight:700,margin:"14px 0 4px"}}>{done.n} leads inserted into staging</h3>
+          <h3 className="dva-display" style={{fontSize:22,fontWeight:700,margin:"14px 0 4px"}}>{done.n} leads inserted into Supabase</h3>
           <p style={{color:"var(--ink-2)",margin:"0 0 14px"}}>The auto-assignment engine routed <b>{done.log.length}</b> new lead{done.log.length!==1?"s":""} to available managers using fair rotation.</p>
           {done.log.length>0 && (
             <div className="dva-card" style={{borderRadius:12,overflow:"hidden",marginBottom:16}}>
@@ -929,7 +936,7 @@ function Marketer({insert,go}){
           onDrop={e=>{e.preventDefault();setDrag(false);onFile(e.dataTransfer.files[0]);}}>
           <div className="dva-ico" style={{background:"var(--teal-soft)",color:"var(--teal)",margin:"0 auto 14px"}}><Upload size={24}/></div>
           <h3 className="dva-display" style={{fontSize:19,fontWeight:700,margin:"0 0 4px"}}>Drop your CSV here</h3>
-          <p style={{color:"var(--ink-2)",fontSize:14,margin:"0 0 16px"}}>Columns: name, email, phone, campus, program, campaign, source, score</p>
+          <p style={{color:"var(--ink-2)",fontSize:14,margin:"0 0 16px"}}>Columns: name, company, email, phone, budget, message</p>
           <input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:"none"}} onChange={e=>onFile(e.target.files[0])}/>
           <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap"}}>
             <button className="dva-btn dva-btn-primary dva-btn-sm" onClick={()=>fileRef.current.click()}><FileText size={15}/> Choose file</button>
@@ -945,20 +952,21 @@ function Marketer({insert,go}){
               <span style={{color:"var(--ink-2)",fontSize:13}}>{rows.length} rows previewed</span>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>setRows([])}>Cancel</button>
-              <button className="dva-btn dva-btn-teal dva-btn-sm" disabled={!validCount} onClick={commit}>Insert {validCount} into staging <ArrowRight size={15}/></button>
+              <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>setRows([])} disabled={busy}>Cancel</button>
+              <button className="dva-btn dva-btn-teal dva-btn-sm" disabled={!validCount||busy} onClick={commit}>{busy? "Inserting…" : <>Insert {validCount} into Supabase <ArrowRight size={15}/></>}</button>
             </div>
           </div>
           <div style={{overflowX:"auto",maxHeight:380,overflowY:"auto",borderRadius:12,border:"1px solid var(--line)"}}>
             <table className="dva-table">
-              <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Program</th><th>Source</th><th>Check</th></tr></thead>
+              <thead><tr><th>#</th><th>Name</th><th>Company</th><th>Email</th><th>Phone</th><th>Budget</th><th>Check</th></tr></thead>
               <tbody>{rows.map(r=>(
                 <tr key={r._row} style={!r._valid?{background:"var(--coral-soft)"}:{}}>
                   <td className="dva-mono" style={{color:"var(--ink-2)"}}>{r._row}</td>
                   <td style={{fontWeight:600}}>{r.name||<i style={{color:"var(--coral)"}}>—</i>}</td>
+                  <td>{r.company||<span style={{color:"var(--ink-2)"}}>—</span>}</td>
                   <td>{r.email||<i style={{color:"var(--coral)"}}>—</i>}</td>
-                  <td className="dva-mono" style={{fontSize:12.5}}>{r.phone||<i style={{color:"var(--coral)"}}>—</i>}</td>
-                  <td>{r.program}</td><td>{r.source}</td>
+                  <td className="dva-mono" style={{fontSize:12.5}}>{r.phone||<span style={{color:"var(--ink-2)"}}>—</span>}</td>
+                  <td className="dva-mono" style={{fontSize:12.5}}>{r.budget||<span style={{color:"var(--ink-2)"}}>—</span>}</td>
                   <td>{r._valid? <span className="badge" style={{background:"#dcf5e6",color:"#107a43"}}><CheckCircle2 size={11}/>ok</span>
                        : <span className="badge" style={{background:"var(--coral-soft)",color:"#c0271a"}}><AlertTriangle size={11}/>{r._issue}</span>}</td>
                 </tr>
@@ -972,13 +980,13 @@ function Marketer({insert,go}){
 }
 
 /* ============================== SALES MANAGER ============================== */
-function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
+function Manager({leads,managers,setStatus,markContact}){
   const active=managers.filter(m=>m.active);
-  const [mid,setMid]=useState(initialMid && active.some(m=>m.id===initialMid) ? initialMid : active[0].id);
+  const [mid,setMid]=useState(active[0].id);
   const [waLeadId,setWaLeadId]=useState(null);
   const [emailLeadId,setEmailLeadId]=useState(null);
   const [detailLeadId,setDetailLeadId]=useState(null);
-  const [f,setF]=useState({status:"",program:"",sla:""});
+  const [f,setF]=useState({status:"",budget:"",sla:""});
   const [q,setQ]=useState("");
   const me=managers.find(m=>m.id===mid);
   const waLead=waLeadId? leads.find(l=>l.id===waLeadId): null;
@@ -993,19 +1001,19 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
 
   const filtered=useMemo(()=>mine.filter(l=>{
     if (f.status && l.status !== f.status) return false;
-    if (f.program && l.program !== f.program) return false;
+    if (f.budget && budgetBand(l.budget) !== f.budget) return false;
     if (f.sla){
       const sk = l.firstContactAt ? "contacted" : (sla(l)?.k || "none");
       if (sk !== f.sla) return false;
     }
     if (q){
       const t = q.toLowerCase();
-      if (!(l.name.toLowerCase().includes(t) || l.email.toLowerCase().includes(t) || l.phone.includes(t))) return false;
+      if (!(l.name.toLowerCase().includes(t) || (l.company||"").toLowerCase().includes(t) || l.email.toLowerCase().includes(t) || l.phone.includes(t))) return false;
     }
     return true;
   }),[mine,f,q]);
-  const hasFilters = !!(f.status || f.program || f.sla || q);
-  const clearFilters = ()=>{ setF({status:"",program:"",sla:""}); setQ(""); };
+  const hasFilters = !!(f.status || f.budget || f.sla || q);
+  const clearFilters = ()=>{ setF({status:"",budget:"",sla:""}); setQ(""); };
 
   return (
     <div className="dva-wrap" style={{padding:"34px 22px 70px"}}>
@@ -1015,11 +1023,10 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
           <h1 className="dva-display" style={{fontSize:30,fontWeight:800,margin:"8px 0 0"}}>Your assigned queue</h1>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <span style={{fontSize:13,color:"var(--ink-2)",fontWeight:600}}>Signed in as</span>
+          <span style={{fontSize:13,color:"var(--ink-2)",fontWeight:600}}>Viewing queue for</span>
           <select className="dva-select" value={mid} onChange={e=>setMid(e.target.value)} style={{fontWeight:700}}>
             {active.map(m=>(<option key={m.id} value={m.id}>{m.name}</option>))}
           </select>
-          {onSignOut && <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={onSignOut}>Sign out</button>}
         </div>
       </div>
 
@@ -1051,11 +1058,15 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
           <Filter size={15} style={{color:"var(--ink-2)"}}/>
           <div style={{position:"relative",flex:"1 1 220px",minWidth:160}}>
             <Search size={13} style={{position:"absolute",left:11,top:10,color:"var(--ink-2)"}}/>
-            <input className="dva-input" placeholder="Search name, email, phone…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:30,width:"100%",fontSize:12.5,padding:"7px 9px 7px 30px"}}/>
+            <input className="dva-input" placeholder="Search name, company, email, phone…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:30,width:"100%",fontSize:12.5,padding:"7px 9px 7px 30px"}}/>
           </div>
           <select className="dva-select" value={f.status} onChange={e=>setF(s=>({...s,status:e.target.value}))} style={{fontSize:12.5}}>
             <option value="">All statuses</option>
             {STAGE_ORDER.map(s=>(<option key={s} value={s}>{s}</option>))}
+          </select>
+          <select className="dva-select" value={f.budget} onChange={e=>setF(s=>({...s,budget:e.target.value}))} style={{fontSize:12.5}}>
+            <option value="">All budgets</option>
+            {BUDGET_BANDS.map(b=>(<option key={b} value={b}>{b}</option>))}
           </select>
           <select className="dva-select" value={f.sla} onChange={e=>setF(s=>({...s,sla:e.target.value}))} style={{fontSize:12.5}}>
             <option value="">All SLA</option>
@@ -1064,16 +1075,12 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
             <option value="ok">On track</option>
             <option value="contacted">Contacted</option>
           </select>
-          <select className="dva-select" value={f.program} onChange={e=>setF(s=>({...s,program:e.target.value}))} style={{fontSize:12.5}}>
-            <option value="">All programs</option>
-            {PROGRAM.map(p=>(<option key={p} value={p}>{p}</option>))}
-          </select>
           {hasFilters &&
             <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={clearFilters} style={{padding:"6px 10px"}}><RefreshCw size={12}/>Clear</button>}
         </div>
         <div style={{overflowX:"auto",maxHeight:520,overflowY:"auto"}}>
           <table className="dva-table">
-            <thead><tr><th>Lead</th><th>Program</th><th>Score</th><th>Status</th><th>First-contact SLA</th><th style={{textAlign:"center"}}>Action</th></tr></thead>
+            <thead><tr><th>Lead</th><th>Budget</th><th>Status</th><th>First-contact SLA</th><th style={{textAlign:"center"}}>Action</th></tr></thead>
             <tbody>
               {filtered.sort((a,b)=>STAGE_ORDER.indexOf(a.status)-STAGE_ORDER.indexOf(b.status)).map(l=>{
                 const idx=STAGE_ORDER.indexOf(l.status);
@@ -1081,9 +1088,8 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
                 const closed=["Converted","Closed"].includes(l.status);
                 return (
                   <tr key={l.id}>
-                    <td><button className="dva-leadname-btn" onClick={()=>setDetailLeadId(l.id)}>{l.name}</button><div className="dva-mono" style={{fontSize:11,color:"var(--ink-2)"}}>{l.id} · {l.campus}</div></td>
-                    <td>{l.program}</td>
-                    <td><span className="dva-mono" style={{fontWeight:700,color:l.score>=80?"var(--teal)":l.score<55?"var(--coral)":"var(--ink)"}}>{l.score}</span></td>
+                    <td><button className="dva-leadname-btn" onClick={()=>setDetailLeadId(l.id)}>{l.name}</button><div className="dva-mono" style={{fontSize:11,color:"var(--ink-2)"}}>{l.id}{l.company?` · ${l.company}`:""}</div></td>
+                    <td><span className="dva-mono" style={{fontWeight:700}}>{l.budget||<span style={{color:"var(--ink-2)",fontWeight:400}}>—</span>}</span></td>
                     <td>
                       <select className="dva-select" value={l.status} onChange={e=>setStatus(l.id,e.target.value)} style={{padding:"5px 8px",fontSize:12.5}}>
                         {STAGE_ORDER.map(s=>(<option key={s} value={s}>{s}</option>))}
@@ -1109,8 +1115,8 @@ function Manager({leads,managers,setStatus,markContact,initialMid,onSignOut}){
                   </tr>
                 );
               })}
-              {mine.length===0 && <tr><td colSpan={6} style={{textAlign:"center",padding:30,color:"var(--ink-2)"}}>No leads assigned yet.</td></tr>}
-              {mine.length>0 && filtered.length===0 && <tr><td colSpan={6} style={{textAlign:"center",padding:30,color:"var(--ink-2)"}}>No leads match the current filters. <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={clearFilters} style={{marginLeft:8,padding:"4px 9px"}}>Clear filters</button></td></tr>}
+              {mine.length===0 && <tr><td colSpan={5} style={{textAlign:"center",padding:30,color:"var(--ink-2)"}}>No leads assigned yet.</td></tr>}
+              {mine.length>0 && filtered.length===0 && <tr><td colSpan={5} style={{textAlign:"center",padding:30,color:"var(--ink-2)"}}>No leads match the current filters. <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={clearFilters} style={{marginLeft:8,padding:"4px 9px"}}>Clear filters</button></td></tr>}
             </tbody>
           </table>
         </div>
@@ -1131,16 +1137,11 @@ const EXEC_TILES = [
   { key:"vox",     label:"Vox Conversation View" },
 ];
 
-function Executive({leads, managers, reassign, onSignOut}){
+function Executive({leads, managers, reassign}){
   const [view, setView] = useState("hub");
   const onBack = () => setView("hub");
   return (
     <div className="dva-wrap" style={{padding:"34px 22px 70px"}}>
-      {onSignOut && (
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:14}}>
-          <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={onSignOut}>Sign out</button>
-        </div>
-      )}
       {view === "hub"     && <ExecHub          leads={leads} onOpen={setView}/>}
       {view === "daily"   && <DailyPerfView    leads={leads} managers={managers} onBack={onBack}/>}
       {view === "overall" && <OverallPerfView  leads={leads} managers={managers} reassign={reassign} onBack={onBack}/>}
@@ -1159,6 +1160,10 @@ function ExecHub({leads, onOpen}){
     () => STAGE_ORDER.map(s => ({ name:s, value: leads.filter(l=>l.status===s).length })).filter(x=>x.value>0),
     [leads]
   );
+  const budgetData = useMemo(
+    () => BUDGET_BANDS.map(b => ({ name:b, value: leads.filter(l=>budgetBand(l.budget)===b).length })).filter(x=>x.value>0),
+    [leads]
+  );
   const stageColors = stageData.map(d => STATUS[d.name]?.fg || "#6d5cf0");
   const tooltipStyle = { background:"#0F181E", border:"1px solid #2F383F", borderRadius:8, fontSize:12, color:"#f1f5f9" };
 
@@ -1169,6 +1174,13 @@ function ExecHub({leads, onOpen}){
         <h1 className="dva-display" style={{fontSize:34,fontWeight:800,margin:"10px 0 6px"}}>Sales Pipeline Cockpit View</h1>
         <p style={{color:"var(--ink-2)",margin:0,fontSize:15}}>Monitor lead flow and conversion trends</p>
       </div>
+
+      {leads.length === 0 && (
+        <div className="dva-card dva-pad" style={{marginBottom:22,display:"flex",alignItems:"center",gap:10,color:"var(--ink-2)"}}>
+          <Inbox size={18} style={{color:"var(--teal)"}}/>
+          <span style={{fontSize:14}}>No leads yet. Upload a CSV from the Marketer workspace to populate the pipeline.</span>
+        </div>
+      )}
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:18,marginBottom:22}} className="exec-hub-tiles">
         {EXEC_TILES.map(t => (
@@ -1201,6 +1213,17 @@ function ExecHub({leads, onOpen}){
               <Tooltip contentStyle={tooltipStyle}/>
               <Legend wrapperStyle={{fontSize:11,color:"#94a3b8"}}/>
             </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="dva-card dva-pad">
+          <h3 style={{margin:"0 0 14px",fontSize:14,fontWeight:600,color:"var(--ink-2)"}}>Budget Band Breakdown</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={budgetData} margin={{top:4,right:8,left:-12,bottom:0}}>
+              <XAxis dataKey="name" tick={{fontSize:10.5,fill:"#94a3b8"}}/>
+              <YAxis tick={{fontSize:11,fill:"#94a3b8"}} allowDecimals={false}/>
+              <Tooltip cursor={{fill:"rgba(204,18,18,.06)"}} contentStyle={tooltipStyle}/>
+              <Bar dataKey="value" radius={[6,6,0,0]} fill="#0F181E"/>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -1395,7 +1418,7 @@ function DailyPerfView({leads, managers, onBack}){
 
 /* ---------- Phase 3: Overall per-manager performance + filters + bulk assign + lead table ---------- */
 function OverallPerfView({leads, managers, reassign, onBack}){
-  const [f,setF]=useState({status:"",campus:"",program:"",campaign:""});
+  const [f,setF]=useState({status:"",source:"",budget:""});
   const [q,setQ]=useState("");
   const [sel,setSel]=useState({});
   const [bulkMgr,setBulkMgr]=useState(managers[0].id);
@@ -1405,10 +1428,9 @@ function OverallPerfView({leads, managers, reassign, onBack}){
 
   const filtered=useMemo(()=>leads.filter(l=>{
     if(f.status&&l.status!==f.status)return false;
-    if(f.campus&&l.campus!==f.campus)return false;
-    if(f.program&&l.program!==f.program)return false;
-    if(f.campaign&&l.campaign!==f.campaign)return false;
-    if(q){const s=q.toLowerCase();if(!(l.name.toLowerCase().includes(s)||l.email.toLowerCase().includes(s)||l.phone.includes(s)))return false;}
+    if(f.source&&l.source!==f.source)return false;
+    if(f.budget&&budgetBand(l.budget)!==f.budget)return false;
+    if(q){const s=q.toLowerCase();if(!(l.name.toLowerCase().includes(s)||(l.company||"").toLowerCase().includes(s)||l.email.toLowerCase().includes(s)||l.phone.includes(s)))return false;}
     return true;
   }),[leads,f,q]);
 
@@ -1421,7 +1443,7 @@ function OverallPerfView({leads, managers, reassign, onBack}){
 
   const selIds=Object.keys(sel).filter(k=>sel[k]);
   const exportCsv=()=>{
-    const cols=["id","name","email","phone","campus","program","campaign","source","score","status","manager"];
+    const cols=["id","name","company","email","phone","budget","message","source","status","manager"];
     const body=filtered.map(l=>cols.map(c=>{
       let v=l[c]; if(c==="manager") v=managers.find(m=>m.id===l.manager)?.name||""; return `"${String(v??"").replace(/"/g,'""')}"`;
     }).join(","));
@@ -1450,15 +1472,15 @@ function OverallPerfView({leads, managers, reassign, onBack}){
         <Filter size={16} style={{color:"var(--ink-2)"}}/>
         <div style={{position:"relative",flex:"1 1 200px"}}>
           <Search size={14} style={{position:"absolute",left:11,top:11,color:"var(--ink-2)"}}/>
-          <input className="dva-input" placeholder="Search name, email, phone…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:32,width:"100%"}}/>
+          <input className="dva-input" placeholder="Search name, company, email, phone…" value={q} onChange={e=>setQ(e.target.value)} style={{paddingLeft:32,width:"100%"}}/>
         </div>
-        {[["status",STAGE_ORDER,"All statuses"],["campus",CAMPUS,"All campuses"],["program",PROGRAM,"All programs"],["campaign",CAMPAIGN,"All campaigns"]].map(([key,opts,ph])=>(
+        {[["status",STAGE_ORDER,"All statuses"],["source",SOURCE,"All sources"],["budget",BUDGET_BANDS,"All budgets"]].map(([key,opts,ph])=>(
           <select key={key} className="dva-select" value={f[key]} onChange={e=>setF(s=>({...s,[key]:e.target.value}))}>
             <option value="">{ph}</option>{opts.map(o=>(<option key={o} value={o}>{o}</option>))}
           </select>
         ))}
-        {(f.status||f.campus||f.program||f.campaign||q) &&
-          <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>{setF({status:"",campus:"",program:"",campaign:""});setQ("");}}><RefreshCw size={13}/>Clear</button>}
+        {(f.status||f.source||f.budget||q) &&
+          <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={()=>{setF({status:"",source:"",budget:""});setQ("");}}><RefreshCw size={13}/>Clear</button>}
       </div>
       <div className="dva-card" style={{overflow:"hidden",marginBottom:18}}>
         <div style={{padding:"14px 18px",borderBottom:"1px solid var(--line)"}}>
@@ -1496,18 +1518,20 @@ function OverallPerfView({leads, managers, reassign, onBack}){
         </div>
         <div style={{overflowX:"auto",maxHeight:460,overflowY:"auto"}}>
           <table className="dva-table">
-            <thead><tr><th style={{width:30}}></th><th>Lead</th><th>Campaign</th><th>Source</th><th>Score</th><th>Status</th><th>Manager</th><th>Created</th></tr></thead>
+            <thead><tr><th style={{width:30}}></th><th>Lead</th><th>Company</th><th>Source</th><th>Budget</th><th>Status</th><th>Manager</th><th>Created</th></tr></thead>
             <tbody>{filtered.slice(0,120).map(l=>(
               <tr key={l.id}>
                 <td><Sel id={l.id}/></td>
                 <td><button className="dva-leadname-btn" onClick={()=>setDetailLeadId(l.id)}>{l.name}</button><div className="dva-mono" style={{fontSize:11,color:"var(--ink-2)"}}>{l.email}</div></td>
-                <td style={{fontSize:12.5}}>{l.campaign}</td><td>{l.source}</td>
-                <td className="dva-mono" style={{fontWeight:700}}>{l.score}</td>
+                <td style={{fontSize:12.5}}>{l.company||<span style={{color:"var(--ink-2)"}}>—</span>}</td><td>{l.source}</td>
+                <td className="dva-mono" style={{fontWeight:700}}>{l.budget||<span style={{color:"var(--ink-2)",fontWeight:400}}>—</span>}</td>
                 <td><Badge status={l.status}/></td>
                 <td style={{fontSize:13}}>{managers.find(m=>m.id===l.manager)?.name||<span style={{color:"var(--ink-2)"}}>unassigned</span>}</td>
                 <td className="dva-mono" style={{fontSize:12,color:"var(--ink-2)"}}>{fmtDate(l.createdAt)}</td>
               </tr>
-            ))}</tbody>
+            ))}
+            {filtered.length===0 && <tr><td colSpan={8} style={{textAlign:"center",padding:30,color:"var(--ink-2)"}}>No leads to show.</td></tr>}
+            </tbody>
           </table>
         </div>
       </div>
@@ -1582,7 +1606,7 @@ function SlaView({leads, managers, onBack}){
               <thead><tr><th>Lead</th><th>Manager</th><th>SLA</th></tr></thead>
               <tbody>{[...overdue, ...urgent].slice(0,80).map(s=>(
                 <tr key={s.lead.id}>
-                  <td><button className="dva-leadname-btn" onClick={()=>setDetailLeadId(s.lead.id)}>{s.lead.name}</button><div className="dva-mono" style={{fontSize:11,color:"var(--ink-2)"}}>{s.lead.id} · {s.lead.program}</div></td>
+                  <td><button className="dva-leadname-btn" onClick={()=>setDetailLeadId(s.lead.id)}>{s.lead.name}</button><div className="dva-mono" style={{fontSize:11,color:"var(--ink-2)"}}>{s.lead.id}{s.lead.company?` · ${s.lead.company}`:""}</div></td>
                   <td style={{fontSize:13}}>{managers.find(m => m.id === s.lead.manager)?.name || "—"}</td>
                   <td><SlaBadge lead={s.lead}/></td>
                 </tr>
@@ -1605,8 +1629,8 @@ const VOX_OUTCOMES = [
   { stage:"NEEDS FOLLOW-UP",   bg:"rgba(251,191,36,.15)", fg:"#fbbf24", weight:3 },
   { stage:"DO NOT CALL",       bg:"rgba(255,90,77,.15)",  fg:"#fca5a5", weight:1 },
 ];
-const VOX_CONCERNS = ["entry requirements","fees and scholarship options","class schedule","campus facilities","accommodation","transfer credits","internship placements"];
-const VOX_CORRECTIONS = [[], ["phone updated"], ["intake shifted to next semester"], ["email corrected"], ["preferred campus changed"], [], [], ["qualification updated"]];
+const VOX_CONCERNS = ["pricing and packages","project timeline","scope of work","technical requirements","contract terms","integration options","support and SLAs"];
+const VOX_CORRECTIONS = [[], ["phone updated"], ["timeline shifted to next quarter"], ["email corrected"], ["budget range revised"], [], [], ["decision-maker updated"]];
 const VOX_CALLBACKS = ["Tomorrow 10am","Friday 3pm","Saturday 11am","Mon 4pm","Wed 2pm"];
 
 function mockVoxCall(lead, manager){
@@ -1765,6 +1789,9 @@ const ThemeOverrideStyle = () => (
       transition:.18s;
     }
     .dva-theme-toggle:hover{ border-color:var(--teal-2); color:var(--teal); }
+    .dva-theme-toggle:disabled{ opacity:.5; cursor:not-allowed; }
+    @keyframes dva-spin{ to{ transform:rotate(360deg); } }
+    @media(max-width:880px){ .dva-nav-signout{ display:none !important; } }
 
     /* ---------- EXECUTIVE HUB TILES (auto-themed via CSS variables) ---------- */
     .exec-hub-tile{
@@ -1841,8 +1868,8 @@ function Guide(){
         The SLA measures how quickly a manager reaches out after assignment. Timers run from the assigned timestamp and flag leads as <span className="badge" style={{background:"var(--amber-soft)",color:"#9a6608"}}>urgent</span> or <span className="badge" style={{background:"var(--coral-soft)",color:"#c0271a"}}>overdue</span> when the 24-hour window is at risk or missed.
       </Section>
       <Section title="Filters, search & data sources">
-        <Li>Filters apply to status, campus, program, and campaign.</Li>
-        <Li>Search matches name, email, and phone.</Li>
+        <Li>Filters apply to status, source, and budget band.</Li>
+        <Li>Search matches name, company, email, and phone.</Li>
         <Li>Exports include only the currently filtered dataset.</Li>
         <Li>Data sources: lead staging, sales-manager roster, and assignment logs.</Li>
       </Section>
@@ -1851,70 +1878,251 @@ function Guide(){
   );
 }
 
-/* ============================== LOGIN GATES (mock) ============================== */
-function ManagerLogin({managers, onLogin}){
-  const active = managers.filter(m=>m.active);
-  const [mid, setMid] = useState(active[0].id);
-  const [password, setPassword] = useState("");
-  const me = managers.find(m=>m.id===mid);
-  const submit = (e)=>{ e.preventDefault(); onLogin(mid); };
-  return (
-    <div className="dva-wrap" style={{padding:"56px 22px 80px",display:"flex",justifyContent:"center"}}>
-      <div className="dva-card" style={{width:"min(440px,100%)",padding:32}}>
-        <span className="dva-eyebrow">Sales Manager workspace</span>
-        <h1 className="dva-display" style={{fontSize:26,fontWeight:800,margin:"8px 0 4px"}}>Sign in to your queue</h1>
-        <p style={{color:"var(--ink-2)",margin:"0 0 22px",fontSize:14}}>Access your assigned leads, SLA timers, and contact tools.</p>
-        <form onSubmit={submit} style={{display:"flex",flexDirection:"column",gap:14}}>
-          <label style={{display:"flex",flexDirection:"column",gap:6}}>
-            <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>SALES MANAGER</span>
-            <select className="dva-select" value={mid} onChange={e=>setMid(e.target.value)} style={{width:"100%",fontWeight:600}}>
-              {active.map(m=>(<option key={m.id} value={m.id}>{m.name}</option>))}
-            </select>
-          </label>
-          <label style={{display:"flex",flexDirection:"column",gap:6}}>
-            <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>PASSWORD</span>
-            <input type="password" className="dva-input" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Any password (demo)" style={{width:"100%"}}/>
-          </label>
-          <button type="submit" className="dva-btn dva-btn-primary" style={{marginTop:6,justifyContent:"center"}}>Sign in as {me?.name?.split(" ")[0] || ""}</button>
-          <p style={{color:"var(--ink-2)",fontSize:12,margin:"4px 0 0",textAlign:"center"}}>Demo prototype — any password is accepted.</p>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function ExecutiveLogin({onLogin}){
+/* ============================== LOGIN GATE (Supabase email OTP) ============================== */
+function LoginGate({theme, toggleTheme}){
+  const [step, setStep]   = useState("email"); // "email" | "otp"
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const submit = (e)=>{ e.preventDefault(); onLogin(email || "executive@dvapulse.com"); };
+  const [token, setToken] = useState("");
+  const [busy, setBusy]   = useState(false);
+  const [error, setError] = useState("");
+  const ThemeIcon = theme === "dark" ? Sun : Moon;
+
+  const sendCode = async (e) => {
+    e.preventDefault();
+    setError("");
+    const addr = email.trim().toLowerCase();
+    if (!addr.endsWith(AUTH_DOMAIN)) {
+      setError(`Please use your ${AUTH_DOMAIN} work email address.`);
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOtp({ email: addr, options: { shouldCreateUser: true } });
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    setEmail(addr);
+    setStep("otp");
+    setToken("");
+  };
+
+  const verify = async (e) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    const { error } = await supabase.auth.verifyOtp({ email, token: token.trim(), type: "email" });
+    setBusy(false);
+    if (error) { setError(error.message); return; }
+    // Success: onAuthStateChange in App establishes the session and swaps the view.
+  };
+
+  const useDifferentEmail = () => { setStep("email"); setToken(""); setError(""); };
+
   return (
-    <div className="dva-wrap" style={{padding:"56px 22px 80px",display:"flex",justifyContent:"center"}}>
-      <div className="dva-card" style={{width:"min(440px,100%)",padding:32}}>
-        <span className="dva-eyebrow">Executive cockpit</span>
-        <h1 className="dva-display" style={{fontSize:26,fontWeight:800,margin:"8px 0 4px"}}>Sign in to your dashboard</h1>
-        <p style={{color:"var(--ink-2)",margin:"0 0 22px",fontSize:14}}>Pipeline KPIs, manager performance, SLA cockpit, and Vox conversations.</p>
-        <form onSubmit={submit} style={{display:"flex",flexDirection:"column",gap:14}}>
-          <label style={{display:"flex",flexDirection:"column",gap:6}}>
-            <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>EMAIL</span>
-            <input type="email" className="dva-input" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@dvapulse.com" style={{width:"100%"}}/>
-          </label>
-          <label style={{display:"flex",flexDirection:"column",gap:6}}>
-            <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>PASSWORD</span>
-            <input type="password" className="dva-input" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Any password (demo)" style={{width:"100%"}}/>
-          </label>
-          <button type="submit" className="dva-btn dva-btn-primary" style={{marginTop:6,justifyContent:"center"}}>Sign in</button>
-          <p style={{color:"var(--ink-2)",fontSize:12,margin:"4px 0 0",textAlign:"center"}}>Demo prototype — any email and password are accepted.</p>
-        </form>
+    <div>
+      <nav className="dva-nav">
+        <div className="dva-wrap dva-navrow">
+          <Logo/>
+          <button className="dva-theme-toggle" onClick={toggleTheme} aria-label="Toggle theme"><ThemeIcon size={16}/></button>
+        </div>
+      </nav>
+      <div className="dva-wrap" style={{padding:"56px 22px 80px",display:"flex",justifyContent:"center"}}>
+        <div className="dva-card" style={{width:"min(440px,100%)",padding:32}}>
+          {step === "email" ? (
+            <>
+              <span className="dva-eyebrow">DVAPulse console</span>
+              <h1 className="dva-display" style={{fontSize:26,fontWeight:800,margin:"8px 0 4px"}}>Sign in</h1>
+              <p style={{color:"var(--ink-2)",margin:"0 0 22px",fontSize:14}}>
+                We'll email you a one-time code. Access is limited to <b>{AUTH_DOMAIN}</b> accounts.
+              </p>
+              <form onSubmit={sendCode} style={{display:"flex",flexDirection:"column",gap:14}}>
+                <label style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>WORK EMAIL</span>
+                  <input type="email" required autoFocus className="dva-input" value={email}
+                    onChange={e=>setEmail(e.target.value)} placeholder={`you${AUTH_DOMAIN}`} style={{width:"100%"}}/>
+                </label>
+                {error && <div style={{fontSize:13,color:"#c0271a",background:"var(--coral-soft)",padding:"9px 12px",borderRadius:8}}>{error}</div>}
+                <button type="submit" className="dva-btn dva-btn-primary" disabled={busy} style={{marginTop:6,justifyContent:"center"}}>
+                  {busy ? "Sending…" : <>Send code <ArrowRight size={16}/></>}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <span className="dva-eyebrow">DVAPulse console</span>
+              <h1 className="dva-display" style={{fontSize:26,fontWeight:800,margin:"8px 0 4px"}}>Enter your code</h1>
+              <p style={{color:"var(--ink-2)",margin:"0 0 22px",fontSize:14}}>
+                Enter the 6-digit code we emailed to <b style={{color:"var(--ink)"}}>{email}</b>.
+              </p>
+              <form onSubmit={verify} style={{display:"flex",flexDirection:"column",gap:14}}>
+                <label style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <span style={{fontSize:11.5,fontWeight:700,color:"var(--ink-2)",letterSpacing:".08em"}}>6-DIGIT CODE</span>
+                  <input type="text" required autoFocus inputMode="numeric" autoComplete="one-time-code"
+                    maxLength={6} className="dva-input dva-mono" value={token}
+                    onChange={e=>setToken(e.target.value.replace(/\D/g,""))} placeholder="••••••"
+                    style={{width:"100%",letterSpacing:".3em",fontSize:18,textAlign:"center"}}/>
+                </label>
+                {error && <div style={{fontSize:13,color:"#c0271a",background:"var(--coral-soft)",padding:"9px 12px",borderRadius:8}}>{error}</div>}
+                <button type="submit" className="dva-btn dva-btn-primary" disabled={busy||token.length<6} style={{marginTop:6,justifyContent:"center"}}>
+                  {busy ? "Verifying…" : <><MailCheck size={16}/> Verify &amp; sign in</>}
+                </button>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontSize:12.5}}>
+                  <button type="button" onClick={useDifferentEmail} className="dva-leadname-btn" style={{color:"var(--teal)"}}>Use a different email</button>
+                </div>
+                <p style={{color:"var(--ink-2)",fontSize:12,margin:"2px 0 0",textAlign:"center",lineHeight:1.5}}>
+                  The email also contains a magic link — you can click that instead of entering the code.
+                </p>
+              </form>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-/* ============================== APP ============================== */
+/* ============================== AUTHENTICATED CONSOLE ============================== */
+function ConsoleMessage({icon:Icon, title, sub}){
+  return (
+    <div className="dva-wrap" style={{padding:"70px 22px"}}>
+      <div className="dva-card dva-pad" style={{textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+        {Icon && <Icon size={26} style={{color:"var(--teal)"}}/>}
+        <h3 className="dva-display" style={{fontSize:20,fontWeight:700,margin:0}}>{title}</h3>
+        {sub && <p style={{color:"var(--ink-2)",margin:0,fontSize:14}}>{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function Console({session, theme, toggleTheme, onSignOut}){
+  const [managers] = useState(MANAGERS_SEED);
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [page, setPage] = useState("home");
+  const go = (p) => { setPage(p); if (typeof window!=="undefined") window.scrollTo(0,0); };
+  const userEmail = session?.user?.email || "";
+
+  const persist = (id, payload) => {
+    supabase.from(LEADS_TABLE).update(payload).eq("id", id).then(({error}) => {
+      if (error) console.error("Supabase update failed for", id, error.message);
+    });
+  };
+
+  const loadLeads = useCallback(async () => {
+    setLoading(true); setLoadError(null);
+    const { data, error } = await supabase.from(LEADS_TABLE).select("*").order("created_at", { ascending: false });
+    if (error) { setLoadError(error.message); setLoading(false); return []; }
+    const mapped = (data || []).map(mapRow);
+    const { leads: assigned, log } = autoAssign(mapped, MANAGERS_SEED);
+    setLeads(assigned);
+    setLoading(false);
+    // Persist any leads that auto-assignment newly routed (New → Assigned).
+    const byId = {}; assigned.forEach(l => { byId[l.id] = l; });
+    log.forEach(entry => {
+      const l = byId[entry.leadId];
+      if (!l) return;
+      const iso = l.assignedAt ? new Date(l.assignedAt).toISOString() : new Date().toISOString();
+      supabase.from(LEADS_TABLE).update({ manager: l.manager, status: "Assigned", assigned_at: iso }).eq("id", l.id)
+        .then(({error}) => { if (error) console.error("Persist auto-assign failed", l.id, error.message); });
+    });
+    return log;
+  }, []);
+
+  useEffect(() => { loadLeads(); }, [loadLeads]);
+
+  const insert = async (newLeads) => {
+    const rows = newLeads.map(l => ({
+      name: l.name, company: l.company || null, email: l.email || null, phone: l.phone || null,
+      budget: l.budget || null, message: l.message || null, source: l.source || "CSV Upload", status: "New",
+    }));
+    const { error } = await supabase.from(LEADS_TABLE).insert(rows);
+    if (error) { console.error("Supabase insert failed", error.message); throw new Error(error.message); }
+    return await loadLeads();
+  };
+
+  const setStatus = (id, status) => {
+    const l = leads.find(x => x.id === id);
+    if (!l) return;
+    const beyondAssigned = status !== "New" && status !== "Assigned";
+    const firstContactAt = l.firstContactAt || (beyondAssigned ? Date.now() : null);
+    const assignedAt = (status === "Assigned" && !l.assignedAt) ? Date.now() : l.assignedAt;
+    setLeads(ls => ls.map(x => x.id === id ? { ...x, status, firstContactAt, assignedAt } : x));
+    const payload = { status };
+    if (assignedAt) payload.assigned_at = new Date(assignedAt).toISOString();
+    if (firstContactAt) payload.first_contact_at = new Date(firstContactAt).toISOString();
+    persist(id, payload);
+  };
+
+  const markContact = (id) => {
+    const l = leads.find(x => x.id === id);
+    if (!l) return;
+    const now = Date.now();
+    const status = l.status === "Assigned" ? "Contacted" : l.status;
+    setLeads(ls => ls.map(x => x.id === id ? { ...x, status, firstContactAt: now } : x));
+    persist(id, { status, first_contact_at: new Date(now).toISOString() });
+  };
+
+  const reassign = (ids, mid) => {
+    const now = Date.now();
+    const resolve = (l) => {
+      const status = ["Converted","Closed"].includes(l.status) ? l.status : (l.status === "New" ? "Assigned" : l.status);
+      const assignedAt = l.assignedAt || now;
+      return { status, assignedAt };
+    };
+    setLeads(ls => ls.map(l => {
+      if (!ids.includes(l.id)) return l;
+      const { status, assignedAt } = resolve(l);
+      return { ...l, manager: mid, status, assignedAt };
+    }));
+    ids.forEach(id => {
+      const l = leads.find(x => x.id === id);
+      if (!l) return;
+      const { status, assignedAt } = resolve(l);
+      persist(id, { manager: mid, status, assigned_at: new Date(assignedAt).toISOString() });
+    });
+  };
+
+  const stats = useMemo(() => {
+    const assigned = leads.filter(l => l.manager).length;
+    const wins = leads.filter(l => l.status === "Converted").length;
+    return {
+      total: leads.length, mgrs: managers.filter(m => m.active).length,
+      conv: assigned ? Math.round(wins / assigned * 100) : 0,
+      fresh: leads.filter(l => l.status === "New").length, wins,
+      assigned,
+    };
+  }, [leads, managers]);
+
+  const dataLoading = loading && leads.length === 0;
+
+  return (
+    <>
+      <Nav page={page} go={go} theme={theme} toggleTheme={toggleTheme}
+        userEmail={userEmail} onRefresh={loadLeads} refreshing={loading} onSignOut={onSignOut}/>
+
+      {loadError && (
+        <div className="dva-wrap" style={{padding:"12px 22px 0"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"10px 14px",borderRadius:10,background:"var(--coral-soft)",color:"#c0271a",fontSize:13}}>
+            <AlertTriangle size={15}/> Could not load leads: {loadError}
+            <button className="dva-btn dva-btn-ghost dva-btn-sm" onClick={loadLeads} style={{marginLeft:"auto",padding:"4px 10px"}}><RefreshCw size={12}/> Retry</button>
+          </div>
+        </div>
+      )}
+
+      {page==="home" && <Home go={go} stats={stats}/>}
+      {page==="marketer" && <Marketer insert={insert} go={go}/>}
+      {page==="manager" && (dataLoading
+        ? <ConsoleMessage icon={Activity} title="Loading leads…" sub="Syncing with Supabase."/>
+        : <Manager leads={leads} managers={managers} setStatus={setStatus} markContact={markContact}/>)}
+      {page==="executive" && (dataLoading
+        ? <ConsoleMessage icon={Activity} title="Loading leads…" sub="Syncing with Supabase."/>
+        : <Executive leads={leads} managers={managers} reassign={reassign}/>)}
+      {page==="guide" && <Guide/>}
+    </>
+  );
+}
+
+/* ============================== APP (auth shell) ============================== */
 export default function App(){
-  const [managers]=useState(MANAGERS_SEED);
-  const [leads,setLeads]=useState(()=>{ const {leads}=autoAssign(seedLeads(MANAGERS_SEED),MANAGERS_SEED); return leads; });
-  const [page,setPage]=useState("home");
   const [theme,setTheme]=useState(()=>{
     if (typeof window==="undefined") return "light";
     return localStorage.getItem("dva-theme") || "light";
@@ -1924,62 +2132,26 @@ export default function App(){
     try { localStorage.setItem("dva-theme", next); } catch {}
     return next;
   });
-  const [mgrAuth,setMgrAuth]=useState(()=>{
-    if (typeof window==="undefined") return null;
-    try { return JSON.parse(localStorage.getItem("dva-mgr-auth") || "null"); } catch { return null; }
-  });
-  const [execAuth,setExecAuth]=useState(()=>{
-    if (typeof window==="undefined") return null;
-    try { return JSON.parse(localStorage.getItem("dva-exec-auth") || "null"); } catch { return null; }
-  });
-  const signInMgr=(mid)=>{ const v={mid,at:Date.now()}; setMgrAuth(v); try{localStorage.setItem("dva-mgr-auth",JSON.stringify(v));}catch{} };
-  const signOutMgr=()=>{ setMgrAuth(null); try{localStorage.removeItem("dva-mgr-auth");}catch{} };
-  const signInExec=(email)=>{ const v={email,at:Date.now()}; setExecAuth(v); try{localStorage.setItem("dva-exec-auth",JSON.stringify(v));}catch{} };
-  const signOutExec=()=>{ setExecAuth(null); try{localStorage.removeItem("dva-exec-auth");}catch{} };
-  const go=(p)=>{ setPage(p); if(typeof window!=="undefined") window.scrollTo(0,0); };
 
-  const insert=(newLeads)=>{
-    const base=leads.length;
-    const staged=newLeads.map((l,i)=>({ ...l, id:"L"+(2000+base+i), status:"New", manager:null, createdAt:Date.now(), assignedAt:null, firstContactAt:null }));
-    const { leads:assignedAll, log } = autoAssign([...leads,...staged], managers);
-    setLeads(assignedAll);
-    return log;
-  };
-  const setStatus=(id,status)=>setLeads(ls=>ls.map(l=>l.id===id?{
-    ...l,status,
-    firstContactAt: (l.firstContactAt|| (status!=="New"&&status!=="Assigned")? (l.firstContactAt||Date.now()):null),
-  }:l));
-  const markContact=(id)=>setLeads(ls=>ls.map(l=>l.id===id?{...l,status:l.status==="Assigned"?"Contacted":l.status,firstContactAt:Date.now()}:l));
-  const reassign=(ids,mid)=>setLeads(ls=>ls.map(l=>ids.includes(l.id)?{
-    ...l,manager:mid,status:["Converted","Closed"].includes(l.status)?l.status:(l.status==="New"?"Assigned":l.status),
-    assignedAt:l.assignedAt||Date.now()
-  }:l));
+  const [session,setSession]=useState(undefined); // undefined = still checking
+  useEffect(()=>{
+    let active = true;
+    supabase.auth.getSession().then(({data})=>{ if (active) setSession(data.session); });
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange((_event, s)=>{ setSession(s); });
+    return ()=>{ active = false; subscription.unsubscribe(); };
+  },[]);
 
-  const stats=useMemo(()=>{
-    const assigned=leads.filter(l=>l.manager).length;
-    const wins=leads.filter(l=>l.status==="Converted").length;
-    return {
-      total:leads.length, mgrs:managers.filter(m=>m.active).length,
-      conv:assigned?Math.round(wins/assigned*100):0,
-      fresh:leads.filter(l=>l.status==="New").length, wins,
-      score:leads.length?Math.round(leads.reduce((a,l)=>a+l.score,0)/leads.length):0,
-    };
-  },[leads,managers]);
+  const signOut = async ()=>{ await supabase.auth.signOut(); };
 
   return (
     <div className={"dva dva-shell" + (theme==="dark" ? " dva-theme-dark" : "")}>
       <Style/>
       <ThemeOverrideStyle/>
-      <Nav page={page} go={go} theme={theme} toggleTheme={toggleTheme}/>
-      {page==="home" && <Home go={go} stats={stats}/>}
-      {page==="marketer" && <Marketer insert={insert} go={go}/>}
-      {page==="manager" && (mgrAuth
-        ? <Manager leads={leads} managers={managers} setStatus={setStatus} markContact={markContact} initialMid={mgrAuth.mid} onSignOut={signOutMgr}/>
-        : <ManagerLogin managers={managers} onLogin={signInMgr}/>)}
-      {page==="executive" && (execAuth
-        ? <Executive leads={leads} managers={managers} reassign={reassign} onSignOut={signOutExec}/>
-        : <ExecutiveLogin onLogin={signInExec}/>)}
-      {page==="guide" && <Guide/>}
+      {session === undefined
+        ? <ConsoleMessage icon={Activity} title="Loading DVAPulse…"/>
+        : !session
+          ? <LoginGate theme={theme} toggleTheme={toggleTheme}/>
+          : <Console session={session} theme={theme} toggleTheme={toggleTheme} onSignOut={signOut}/>}
     </div>
   );
 }
