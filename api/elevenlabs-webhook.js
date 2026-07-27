@@ -90,21 +90,23 @@ export default async function handler(req, res) {
     payload: event,
   };
 
-  // ignore-duplicates makes ElevenLabs retries of the same conversation a no-op.
-  const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/dvapulse_calls?on_conflict=conversation_id`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=ignore-duplicates",
-      },
-      body: JSON.stringify(row),
-    }
-  );
+  // Plain insert: anon has an INSERT-only policy, so PostgREST upsert
+  // (on_conflict) would fail RLS. The unique index on conversation_id makes
+  // ElevenLabs retries come back as 409, which we treat as already-stored.
+  const resp = await fetch(`${SUPABASE_URL}/rest/v1/dvapulse_calls`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(row),
+  });
 
+  if (resp.status === 409) {
+    return res.status(200).json({ ok: true, duplicate: true });
+  }
   if (!resp.ok) {
     console.error("supabase insert failed", resp.status, await resp.text());
     return res.status(500).json({ error: "storage failed" });
