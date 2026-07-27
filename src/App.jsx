@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import Papa from "papaparse";
 import logoUrl from "./assets/logo.png";
-import { supabase, LEADS_TABLE, AUTH_DOMAIN } from "./lib/supabase.js";
+import { supabase, LEADS_TABLE, CALLS_TABLE, AUTH_DOMAIN } from "./lib/supabase.js";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
   PieChart, Pie, Legend,
@@ -16,6 +16,10 @@ import {
 /* ============================== ELEVENLABS AI CALL ============================== */
 // Tenant config for the voice agent. Move to per-org settings when DVAPulse goes multi-tenant.
 const AI_AGENT_NAME = "Aria";
+// Must match the agent-id of the singleton widget in index.html — the
+// workspace post-call webhook stores calls from ALL DVA agents, so views
+// filter to DVAPulse's own agent.
+const AI_AGENT_ID = "agent_5701kjvm1x4we7e9pbfdt4nj752v";
 const AI_ORG_NAME = "Digital Vibes Asia";
 const AI_ORG_SHORT = "DVA";
 
@@ -63,6 +67,9 @@ function startAiCall(lead, manager){
       el.style.display = "none";
       clearInterval(aiWatcher);
       aiWatcher = null;
+      // The post-call webhook lands a few seconds after the call ends —
+      // let views refetch dvapulse_calls.
+      window.dispatchEvent(new CustomEvent("dva:ai-call-ended"));
     }
   }, 500);
 }
@@ -1654,6 +1661,29 @@ function mockVoxCall(lead, manager){
 
 function VoxView({leads, managers, onBack}){
   const [filter, setFilter] = useState("all");
+  const [liveCalls, setLiveCalls] = useState([]);
+  const [liveError, setLiveError] = useState(null);
+
+  const fetchLiveCalls = useCallback(async () => {
+    const { data, error } = await supabase
+      .from(CALLS_TABLE)
+      .select("conversation_id, lead_id, lead_name, call_status, duration_secs, summary, created_at")
+      .eq("agent_id", AI_AGENT_ID)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) { setLiveError(error.message); return; }
+    setLiveError(null);
+    setLiveCalls(data || []);
+  }, []);
+
+  useEffect(() => {
+    fetchLiveCalls();
+    // The post-call webhook lands a few seconds after an Aria call ends.
+    const onEnded = () => { [7000, 25000, 60000].forEach(ms => setTimeout(fetchLiveCalls, ms)); };
+    window.addEventListener("dva:ai-call-ended", onEnded);
+    return () => window.removeEventListener("dva:ai-call-ended", onEnded);
+  }, [fetchLiveCalls]);
+
   const calls = useMemo(() =>
     leads.map(l => mockVoxCall(l, managers.find(m => m.id === l.manager)))
          .filter(Boolean)
@@ -1686,8 +1716,48 @@ function VoxView({leads, managers, onBack}){
         }/>
       <div className="dva-card dva-pad" style={{padding:"10px 16px",marginBottom:18,display:"flex",alignItems:"center",gap:10,background:"rgba(109,92,240,.08)",borderColor:"rgba(109,92,240,.3)"}}>
         <Zap size={14} style={{color:"var(--violet)"}}/>
-        <span style={{fontSize:12.5,color:"var(--ink-2)"}}>Mock data — Vox call summaries are synthetic until the ElevenLabs webhook backend is wired in. Each summary is deterministic per lead.</span>
+        <span style={{fontSize:12.5,color:"var(--ink-2)"}}>
+          {liveError
+            ? `Couldn't load live call records (${liveError}) — showing synthetic examples only.`
+            : liveCalls.length > 0
+              ? `${liveCalls.length} live AI call record${liveCalls.length === 1 ? "" : "s"} captured by the post-call webhook. Synthetic examples follow below.`
+              : "No live call records yet — real Aria calls will appear here automatically after each call ends. Summaries below are synthetic examples."}
+        </span>
       </div>
+      {liveCalls.length > 0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:22}}>
+          <h3 style={{margin:"0 0 2px",fontSize:14,fontWeight:700,letterSpacing:".04em",textTransform:"uppercase",color:"var(--ink-2)"}}>Live AI call records</h3>
+          {liveCalls.map(c => {
+            const lead = leads.find(l => String(l.id) === String(c.lead_id));
+            const managerName = lead ? (managers.find(m => m.id === lead.manager)?.name || "—") : "—";
+            const secs = c.duration_secs || 0;
+            return (
+              <div key={c.conversation_id} className="dva-card dva-pad" style={{padding:18,borderColor:"rgba(34,197,94,.35)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <span className="dva-mono" style={{fontSize:11.5,color:"var(--ink-2)"}}>{c.conversation_id}</span>
+                      <span className="badge" style={{background:"rgba(34,197,94,.18)",color:"#86efac"}}>LIVE RECORD</span>
+                      {c.call_status && <span className="badge" style={{background:"rgba(109,92,240,.15)",color:"var(--violet)"}}>{String(c.call_status).toUpperCase()}</span>}
+                    </div>
+                    <div style={{fontWeight:700,fontSize:15}}>{lead?.name || c.lead_name || "—"}</div>
+                    <div style={{fontSize:12.5,color:"var(--ink-2)",marginTop:3}}>
+                      Called by {AI_AGENT_NAME} for {managerName} · {Math.floor(secs/60)}m {secs%60}s
+                    </div>
+                  </div>
+                  <div style={{fontSize:12.5,color:"var(--ink-2)",textAlign:"right"}}>
+                    {new Date(c.created_at).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+                  </div>
+                </div>
+                <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--line-2)",fontSize:13,lineHeight:1.7}}>
+                  {c.summary || <span style={{color:"var(--ink-2)"}}>No summary was produced for this call.</span>}
+                </div>
+              </div>
+            );
+          })}
+          <h3 style={{margin:"14px 0 2px",fontSize:14,fontWeight:700,letterSpacing:".04em",textTransform:"uppercase",color:"var(--ink-2)"}}>Synthetic examples</h3>
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18}} className="exec-stats">
         <KpiCard label="Total Vox calls"  value={counts.total}     I={PhoneCall}/>
         <KpiCard label="Validated"        value={counts.validated} I={CheckCircle2}  color="var(--teal-2)"/>

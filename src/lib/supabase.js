@@ -21,4 +21,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 
 export const LEADS_TABLE = "dvapulse_leads";
+// Post-call records inserted by pulse.digitalvibesasia.com/api/elevenlabs-webhook
+// (RLS: SELECT only for authenticated @digitalvibesasia.com users).
+export const CALLS_TABLE = "dvapulse_calls";
 export const AUTH_DOMAIN = "@digitalvibesasia.com";
