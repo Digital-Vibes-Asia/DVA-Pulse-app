@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "platform-web",
+      "runtimeExecutable": "corepack",
+      "runtimeArgs": ["pnpm", "-C", "/Users/marklesterjackson/dvapulse-platform", "--filter", "@dvapulse/web", "dev"],
+      "port": 3000
     }
   ]
 }
