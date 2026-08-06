@@ -19,7 +19,7 @@ const AI_AGENT_NAME = "Aria";
 // Must match the agent-id of the singleton widget in index.html — the
 // workspace post-call webhook stores calls from ALL DVA agents, so views
 // filter to DVAPulse's own agent.
-const AI_AGENT_ID = "agent_5701kjvm1x4we7e9pbfdt4nj752v";
+const AI_AGENT_ID = "agent_9801kzb5mxxjf4yrk7p1v97e0wmr";
 const AI_ORG_NAME = "Digital Vibes Asia";
 const AI_ORG_SHORT = "DVA";
 
